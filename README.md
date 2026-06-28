@@ -1,3 +1,5 @@
+<img width="1672" height="941" alt="ChatGPT Image Jun 28, 2026, 08_06_12 PM" src="https://github.com/user-attachments/assets/6a35af8b-7719-4977-8e08-1315a1d497a4" />
+
 # RetroPlay
 
 An offline desktop music player for local MP3s, with synced lyrics and a retro
