@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegui/nicegui/main/nicegui/static/tauri/capability-schema.json",
+  "identifier": "default",
+  "description": "Default capabilities for RetroPlay",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "dialog:allow-open",
+    "shell:default"
+  ]
+}

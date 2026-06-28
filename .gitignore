@@ -1,0 +1,9 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/schemas/
+.vite/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
