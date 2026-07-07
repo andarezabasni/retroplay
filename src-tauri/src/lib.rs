@@ -378,6 +378,76 @@ async fn fetch_lyrics(
         }
     }
 
+    // Fallback for messy YouTube downloads: the exact lookups above fail when
+    // the artist is really a channel name and the title is "Song - Artist
+    // (Official Video)". Search LRCLIB by free text instead, and trust the
+    // track's own duration to pick the right recording among same-titled songs.
+    if best_synced.is_none() && best_plain.is_none() && duration_secs > 0.0 {
+        const TOLERANCE: f64 = 8.0;
+
+        // Try the whole cleaned title, then each "Song - Artist" segment, since
+        // the real song name is usually one piece of it.
+        let mut candidates: Vec<String> = vec![title.clone()];
+        for seg in title.split(" - ") {
+            let seg = seg.trim().to_string();
+            if seg.chars().count() >= 3
+                && !candidates.iter().any(|c| c.eq_ignore_ascii_case(&seg))
+            {
+                candidates.push(seg);
+            }
+        }
+
+        'candidates: for cand in &candidates {
+            let url = format!(
+                "https://lrclib.net/api/search?q={}",
+                urlencoding::encode(cand),
+            );
+            let resp = match client.get(&url).header("User-Agent", user_agent).send().await {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            if !resp.status().is_success() {
+                continue;
+            }
+            if let Ok(results) = resp.json::<Vec<LrclibResponse>>().await {
+                // Keep only recordings whose length matches ours, then prefer
+                // synced and the closest duration.
+                let mut close: Vec<&LrclibResponse> = results
+                    .iter()
+                    .filter(|r| {
+                        r.duration
+                            .map(|d| (d - duration_secs).abs() <= TOLERANCE)
+                            .unwrap_or(false)
+                    })
+                    .collect();
+                close.sort_by(|a, b| {
+                    let a_score = if a.synced_lyrics.is_some() { 0 } else { 1 };
+                    let b_score = if b.synced_lyrics.is_some() { 0 } else { 1 };
+                    let da = (a.duration.unwrap_or(f64::MAX) - duration_secs).abs();
+                    let db = (b.duration.unwrap_or(f64::MAX) - duration_secs).abs();
+                    a_score
+                        .cmp(&b_score)
+                        .then(da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal))
+                });
+
+                for r in close {
+                    if r.instrumental {
+                        is_instrumental = true;
+                    }
+                    if r.synced_lyrics.is_some() && best_synced.is_none() {
+                        best_synced = r.synced_lyrics.clone();
+                    }
+                    if r.plain_lyrics.is_some() && best_plain.is_none() {
+                        best_plain = r.plain_lyrics.clone();
+                    }
+                    if best_synced.is_some() {
+                        break 'candidates;
+                    }
+                }
+            }
+        }
+    }
+
     Ok(LyricsResult {
         synced: best_synced.clone(),
         plain: best_plain.clone(),
