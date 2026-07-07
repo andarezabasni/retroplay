@@ -46,6 +46,28 @@ export default function App() {
   const [lyricsView, setLyricsView] = useState<"panel" | "focus" | "overlay">("panel");
   const winSnapshot = useRef<WindowSnapshot | null>(null);
   const focusContainerRef = useRef<HTMLDivElement>(null);
+
+  // Floating-lyrics text style, persisted so it survives restarts.
+  interface OverlayStyle {
+    color: "amber" | "white" | "black" | "mint";
+    font: "retro" | "clean";
+    size: "s" | "m" | "l";
+  }
+  const [overlayStyle, setOverlayStyle] = useState<OverlayStyle>(() => {
+    const fallback: OverlayStyle = { color: "amber", font: "retro", size: "m" };
+    try {
+      return {
+        ...fallback,
+        ...JSON.parse(localStorage.getItem("retroplay_overlay_style") || "{}"),
+      };
+    } catch {
+      return fallback;
+    }
+  });
+  const [overlaySettingsOpen, setOverlaySettingsOpen] = useState(false);
+  useEffect(() => {
+    localStorage.setItem("retroplay_overlay_style", JSON.stringify(overlayStyle));
+  }, [overlayStyle]);
   const [ytUrl, setYtUrl] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [downloadMsg, setDownloadMsg] = useState("");
@@ -301,7 +323,7 @@ export default function App() {
 
     setLyricsStatus("fetching");
     const result = await fetchLyrics(
-      track.title, track.artist, track.album, track.duration_secs
+      musicFolder, track.title, track.artist, track.album, track.duration_secs
     );
     setLyricsCache((prev) => ({ ...prev, [cacheKey]: result }));
 
@@ -320,24 +342,46 @@ export default function App() {
     }
   }
 
+  // Serialize float-mode transitions: a double-click would otherwise snapshot
+  // the window mid-morph and corrupt the saved geometry.
+  const floatTransition = useRef(false);
+
   async function toggleMiniMode() {
-    if (!miniMode) {
-      winSnapshot.current = await enterMiniMode();
-      setMiniMode(true);
-    } else {
-      await exitFloatMode(winSnapshot.current);
-      setMiniMode(false);
+    if (floatTransition.current || lyricsView === "overlay") return;
+    floatTransition.current = true;
+    try {
+      if (!miniMode) {
+        winSnapshot.current = await enterMiniMode();
+        setMiniMode(true);
+      } else {
+        await exitFloatMode(winSnapshot.current);
+        setMiniMode(false);
+      }
+    } finally {
+      floatTransition.current = false;
     }
   }
 
   async function enterOverlay() {
-    winSnapshot.current = await enterLyricsOverlay();
-    setLyricsView("overlay");
+    if (floatTransition.current || lyricsView === "overlay" || miniMode) return;
+    floatTransition.current = true;
+    try {
+      winSnapshot.current = await enterLyricsOverlay();
+      setLyricsView("overlay");
+    } finally {
+      floatTransition.current = false;
+    }
   }
 
   async function exitOverlay() {
-    await exitFloatMode(winSnapshot.current);
-    setLyricsView("panel");
+    if (floatTransition.current) return;
+    floatTransition.current = true;
+    try {
+      await exitFloatMode(winSnapshot.current);
+      setLyricsView("panel");
+    } finally {
+      floatTransition.current = false;
+    }
   }
 
   // Transparent window background while the lyrics overlay is active.
@@ -421,7 +465,7 @@ export default function App() {
         : "";
     return (
       <div
-        className="lyrics-overlay"
+        className={`lyrics-overlay ov-color-${overlayStyle.color} ov-font-${overlayStyle.font} ov-size-${overlayStyle.size}`}
         onMouseDown={(e) => {
           if (e.button === 0 && !isInteractive(e.target)) startWindowDrag();
         }}
@@ -443,11 +487,48 @@ export default function App() {
             {currentTrack ? `${currentTrack.title} — ${currentTrack.artist}` : "RETROPLAY"}
           </span>
           <button
+            className={`mini-btn ${overlaySettingsOpen ? "mini-expand" : ""}`}
+            onClick={() => setOverlaySettingsOpen((o) => !o)}
+            title="Text style settings"
+          >⚙</button>
+          <button
             className="mini-btn mini-expand"
             onClick={exitOverlay}
             title="Back to full view"
           >⤢</button>
         </div>
+        {overlaySettingsOpen && (
+          <div className="overlay-settings">
+            {(["amber", "white", "black", "mint"] as const).map((c) => (
+              <button
+                key={c}
+                className={`ov-swatch ov-swatch-${c} ${overlayStyle.color === c ? "active" : ""}`}
+                onClick={() => setOverlayStyle((s) => ({ ...s, color: c }))}
+                title={`Text color: ${c}`}
+              />
+            ))}
+            <span className="ov-sep" />
+            <button
+              className={`ov-opt ${overlayStyle.font === "retro" ? "active" : ""}`}
+              onClick={() => setOverlayStyle((s) => ({ ...s, font: "retro" }))}
+              title="Monospace retro font"
+            >MONO</button>
+            <button
+              className={`ov-opt ${overlayStyle.font === "clean" ? "active" : ""}`}
+              onClick={() => setOverlayStyle((s) => ({ ...s, font: "clean" }))}
+              title="Clean sans-serif font"
+            >CLEAN</button>
+            <span className="ov-sep" />
+            {(["s", "m", "l"] as const).map((sz) => (
+              <button
+                key={sz}
+                className={`ov-opt ${overlayStyle.size === sz ? "active" : ""}`}
+                onClick={() => setOverlayStyle((s) => ({ ...s, size: sz }))}
+                title={`Text size ${sz.toUpperCase()}`}
+              >{sz.toUpperCase()}</button>
+            ))}
+          </div>
+        )}
         <div className="overlay-line">
           {curLine ||
             (lyricsStatus === "synced"

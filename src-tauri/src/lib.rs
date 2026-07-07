@@ -284,20 +284,61 @@ fn clean_artist(artist: &str) -> String {
     s.trim().to_string()
 }
 
+/// Path of the on-disk lyrics cache entry for a track: `.lyrics/<artist - title>.json`
+/// next to the music folder. None when there is no folder (browser mock).
+fn lyrics_cache_path(folder: &str, artist: &str, title: &str) -> Option<PathBuf> {
+    if folder.trim().is_empty() {
+        return None;
+    }
+    let key: String = format!("{} - {}", artist.trim(), title.trim())
+        .to_lowercase()
+        .chars()
+        .map(|c| match c {
+            '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            c => c,
+        })
+        .take(120)
+        .collect();
+    if key.trim().is_empty() {
+        return None;
+    }
+    Some(
+        PathBuf::from(folder)
+            .join(".lyrics")
+            .join(format!("{}.json", key)),
+    )
+}
+
 #[tauri::command]
 async fn fetch_lyrics(
+    folder: String,
     title: String,
     artist: String,
     album: String,
     duration_secs: f64,
 ) -> Result<LyricsResult, String> {
-    let client = reqwest::Client::new();
     let user_agent = "RetroPlay/1.0.0 (lrclib.net)";
 
     // Normalize metadata so download-tool noise doesn't break matching.
     let title = clean_title(&title);
     let artist = clean_artist(&artist);
     let artist_known = !is_placeholder(&artist);
+
+    // Lyrics fetched before are stored on disk — works offline and is instant.
+    let cache_path = lyrics_cache_path(&folder, &artist, &title);
+    if let Some(path) = &cache_path {
+        if let Ok(data) = fs::read_to_string(path) {
+            if let Ok(cached) = serde_json::from_str::<LyricsResult>(&data) {
+                return Ok(cached);
+            }
+        }
+    }
+
+    // 10s per request so a slow lrclib.net can't hang "Fetching lyrics…" forever.
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
 
     // Strategy: try multiple search queries, prioritize synced > plain > none
     let mut queries: Vec<String> = vec![
@@ -465,11 +506,25 @@ async fn fetch_lyrics(
         }
     }
 
-    Ok(LyricsResult {
+    let result = LyricsResult {
         synced: best_synced.clone(),
         plain: best_plain.clone(),
         instrumental: is_instrumental && best_plain.is_none() && best_synced.is_none(),
-    })
+    };
+
+    // Cache hits only — a miss stays uncached so a later online session retries.
+    if result.synced.is_some() || result.plain.is_some() || result.instrumental {
+        if let Some(path) = &cache_path {
+            if let Some(dir) = path.parent() {
+                let _ = fs::create_dir_all(dir);
+            }
+            if let Ok(json) = serde_json::to_string(&result) {
+                let _ = fs::write(path, json);
+            }
+        }
+    }
+
+    Ok(result)
 }
 
 /// Download audio from a URL (e.g. YouTube) as MP3 into `folder` using the

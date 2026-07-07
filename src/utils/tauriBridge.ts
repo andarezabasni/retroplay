@@ -147,6 +147,7 @@ export async function getTrackAssetUrl(path: string): Promise<string> {
 }
 
 export async function fetchLyrics(
+  folder: string,
   title: string,
   artist: string,
   album: string,
@@ -154,7 +155,7 @@ export async function fetchLyrics(
 ): Promise<LyricsResult> {
   if (isTauri()) {
     const { invoke } = await import("@tauri-apps/api/core");
-    return invoke("fetch_lyrics", { title, artist, album, durationSecs });
+    return invoke("fetch_lyrics", { folder, title, artist, album, durationSecs });
   }
   return fetchLyricsBrowser(title, artist, album, durationSecs);
 }
@@ -212,11 +213,14 @@ export async function deletePlaylist(folder: string, name: string): Promise<void
 
 // ── Mini mode (floating always-on-top window) ──
 
+/** Saved main-window geometry, in physical pixels — physical coordinates are
+ *  global across monitors, so mixed-DPI dual-screen setups restore correctly. */
 export interface WindowSnapshot {
   width: number;
   height: number;
   x: number;
   y: number;
+  maximized: boolean;
 }
 
 const MINI_W = 380;
@@ -236,27 +240,47 @@ async function enterFloatWindow(
   width: number,
   height: number,
   place: "bottom-right" | "bottom-center",
+  shadow: boolean,
 ): Promise<WindowSnapshot | null> {
   if (!isTauri()) {
     console.log(`[mock] enterFloatWindow(${width}×${height}, ${place})`);
     return null;
   }
-  const { getCurrentWindow, LogicalSize, LogicalPosition, currentMonitor } =
+  const { getCurrentWindow, LogicalSize, PhysicalPosition, currentMonitor } =
     await import("@tauri-apps/api/window");
   const win = getCurrentWindow();
-  // A maximized window would snapshot its maximized size; unmaximize first
-  // so restore returns to a sane floating size.
-  if (await win.isMaximized()) {
+
+  // Unmaximizing teleports the window to its pre-maximize position, which may
+  // be on another monitor. Remember the monitor the maximized window was on
+  // so exitFloatMode can maximize it back there instead.
+  const maximized = await win.isMaximized();
+  const homeMonitor = maximized ? await currentMonitor() : null;
+  if (maximized) {
     await win.unmaximize();
   }
-  const factor = await win.scaleFactor();
-  const size = (await win.outerSize()).toLogical(factor);
-  const pos = (await win.outerPosition()).toLogical(factor);
-  const snapshot = { width: size.width, height: size.height, x: pos.x, y: pos.y };
+
+  // innerSize, not outerSize: setSize() sets the *content* size, so restoring
+  // an outer snapshot would grow the window by the frame height every cycle.
+  const size = await win.innerSize();
+  const pos = await win.outerPosition();
+  const snapshot: WindowSnapshot =
+    maximized && homeMonitor
+      ? {
+          // Anchor inside the original monitor; exit re-maximizes from there.
+          x: homeMonitor.position.x + 64,
+          y: homeMonitor.position.y + 64,
+          width: size.width,
+          height: size.height,
+          maximized: true,
+        }
+      : { width: size.width, height: size.height, x: pos.x, y: pos.y, maximized };
 
   await win.setDecorations(false);
   await win.setAlwaysOnTop(true);
   await win.setResizable(false);
+  // The DWM drop shadow paints a translucent rounded box behind undecorated
+  // windows — on the transparent lyrics overlay it must be off.
+  await win.setShadow(shadow);
   // Clear the main window's min-size constraint — otherwise Windows clamps
   // setSize back up to 900×600 and the floating panel never shrinks.
   await win.setMinSize(null);
@@ -264,26 +288,27 @@ async function enterFloatWindow(
 
   const mon = await currentMonitor();
   if (mon) {
-    const mSize = mon.size.toLogical(mon.scaleFactor);
-    const mPos = mon.position.toLogical(mon.scaleFactor);
+    const f = mon.scaleFactor;
+    const wPhys = Math.round(width * f);
+    const hPhys = Math.round(height * f);
     const x =
       place === "bottom-right"
-        ? mPos.x + mSize.width - width - 16
-        : mPos.x + (mSize.width - width) / 2;
-    const y = mPos.y + mSize.height - height - 56;
-    await win.setPosition(new LogicalPosition(x, y));
+        ? mon.position.x + mon.size.width - wPhys - Math.round(16 * f)
+        : mon.position.x + Math.round((mon.size.width - wPhys) / 2);
+    const y = mon.position.y + mon.size.height - hPhys - Math.round(56 * f);
+    await win.setPosition(new PhysicalPosition(x, y));
   }
   return snapshot;
 }
 
 /** Mini player: bottom-right corner. */
 export function enterMiniMode(): Promise<WindowSnapshot | null> {
-  return enterFloatWindow(MINI_W, MINI_H, "bottom-right");
+  return enterFloatWindow(MINI_W, MINI_H, "bottom-right", true);
 }
 
 /** Floating lyrics overlay: wide bar at the bottom-center. */
 export function enterLyricsOverlay(): Promise<WindowSnapshot | null> {
-  return enterFloatWindow(OVERLAY_W, OVERLAY_H, "bottom-center");
+  return enterFloatWindow(OVERLAY_W, OVERLAY_H, "bottom-center", false);
 }
 
 /** Restore the main window from any floating mode. */
@@ -292,16 +317,54 @@ export async function exitFloatMode(snap: WindowSnapshot | null): Promise<void> 
     console.log("[mock] exitFloatMode()");
     return;
   }
-  const { getCurrentWindow, LogicalSize, LogicalPosition } =
+  const { getCurrentWindow, LogicalSize, PhysicalSize, PhysicalPosition, availableMonitors } =
     await import("@tauri-apps/api/window");
   const win = getCurrentWindow();
   await win.setAlwaysOnTop(false);
   await win.setDecorations(true);
   await win.setResizable(true);
+  await win.setShadow(true);
   await win.setMinSize(new LogicalSize(MAIN_MIN_W, MAIN_MIN_H));
-  await win.setSize(new LogicalSize(snap?.width ?? 1100, snap?.height ?? 720));
-  if (snap) {
-    await win.setPosition(new LogicalPosition(snap.x, snap.y));
+
+  if (!snap) {
+    await win.setSize(new LogicalSize(1100, 720));
+    await win.center();
+    return;
+  }
+
+  // The snapshot is in physical pixels. Clamp it onto the monitor it belongs
+  // to (the one containing its top-left corner) so the title bar stays
+  // reachable — important on dual screens, where the snapshot's monitor is
+  // not necessarily the one the floating panel is on now.
+  const monitors = await availableMonitors();
+  const mon =
+    monitors.find(
+      (m) =>
+        snap.x >= m.position.x &&
+        snap.x < m.position.x + m.size.width &&
+        snap.y >= m.position.y &&
+        snap.y < m.position.y + m.size.height,
+    ) ?? monitors[0];
+
+  if (mon) {
+    const f = mon.scaleFactor;
+    const width = Math.max(snap.width, Math.round(MAIN_MIN_W * f));
+    const height = Math.max(snap.height, Math.round(MAIN_MIN_H * f));
+    await win.setSize(new PhysicalSize(width, height));
+    const maxX = mon.position.x + Math.max(mon.size.width - width, 0);
+    const maxY = mon.position.y + Math.max(mon.size.height - height, 0);
+    const x = Math.min(Math.max(snap.x, mon.position.x), maxX);
+    const y = Math.min(Math.max(snap.y, mon.position.y), maxY);
+    await win.setPosition(new PhysicalPosition(x, y));
+  } else {
+    await win.setSize(new PhysicalSize(snap.width, snap.height));
+    await win.setPosition(new PhysicalPosition(snap.x, snap.y));
+  }
+
+  // The window is back on its home monitor — now maximize returns it to the
+  // maximized state it was in there.
+  if (snap.maximized) {
+    await win.maximize();
   }
 }
 

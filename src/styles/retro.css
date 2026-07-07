@@ -1101,27 +1101,143 @@ html.overlay-mode #root::after {
 .overlay-line {
   max-width: 100%;
   text-align: center;
-  font-size: 26px;
   line-height: 1.4;
-  color: #ffd76e;
-  text-shadow:
-    -1px -1px 0 rgba(0, 0, 0, 0.85),
-    1px -1px 0 rgba(0, 0, 0, 0.85),
-    -1px 1px 0 rgba(0, 0, 0, 0.85),
-    1px 1px 0 rgba(0, 0, 0, 0.85),
-    0 2px 10px rgba(0, 0, 0, 0.7);
 }
 
 .overlay-next {
   max-width: 100%;
   text-align: center;
-  font-size: 14px;
-  color: rgba(245, 238, 220, 0.85);
+  opacity: 0.8;
+}
+
+/* Text size (ov-size-*) */
+.ov-size-s .overlay-line { font-size: 20px; }
+.ov-size-s .overlay-next { font-size: 12px; }
+.ov-size-m .overlay-line { font-size: 26px; }
+.ov-size-m .overlay-next { font-size: 14px; }
+.ov-size-l .overlay-line { font-size: 34px; }
+.ov-size-l .overlay-next { font-size: 18px; }
+
+/* Font (ov-font-*) */
+.ov-font-retro .overlay-line,
+.ov-font-retro .overlay-next {
+  font-family: var(--font-body);
+}
+
+.ov-font-clean .overlay-line,
+.ov-font-clean .overlay-next {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+/* Text color (ov-color-*) — soft layered shadows instead of a hard outline.
+   Light colors get a dark halo (for light wallpapers the dark colors get a
+   light halo), so every preset stays readable on any background. */
+.ov-color-amber .overlay-line { color: #ffd76e; }
+.ov-color-white .overlay-line { color: #f8f6f0; }
+.ov-color-mint .overlay-line { color: #8ce8bf; }
+.ov-color-amber .overlay-line,
+.ov-color-white .overlay-line,
+.ov-color-mint .overlay-line {
   text-shadow:
-    -1px -1px 0 rgba(0, 0, 0, 0.8),
-    1px -1px 0 rgba(0, 0, 0, 0.8),
-    -1px 1px 0 rgba(0, 0, 0, 0.8),
-    1px 1px 0 rgba(0, 0, 0, 0.8);
+    0 1px 2px rgba(0, 0, 0, 0.9),
+    0 0 12px rgba(0, 0, 0, 0.55),
+    0 0 28px rgba(0, 0, 0, 0.35);
+}
+
+.ov-color-amber .overlay-next,
+.ov-color-white .overlay-next,
+.ov-color-mint .overlay-next {
+  color: #efe9da;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.85),
+    0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.ov-color-black .overlay-line {
+  color: #232723;
+  text-shadow:
+    0 1px 2px rgba(255, 255, 255, 0.9),
+    0 0 12px rgba(255, 255, 255, 0.6),
+    0 0 28px rgba(255, 255, 255, 0.4);
+}
+
+.ov-color-black .overlay-next {
+  color: #3a403a;
+  text-shadow:
+    0 1px 2px rgba(255, 255, 255, 0.85),
+    0 0 10px rgba(255, 255, 255, 0.55);
+}
+
+/* Settings row (visible while hovering, below the controls) */
+.overlay-settings {
+  position: absolute;
+  top: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: rgba(20, 24, 22, 0.85);
+  border-radius: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.lyrics-overlay:hover .overlay-settings {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ov-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s;
+}
+
+.ov-swatch.active {
+  border-color: #fff;
+}
+
+.ov-swatch-amber { background: #ffd76e; }
+.ov-swatch-white { background: #f8f6f0; }
+.ov-swatch-black { background: #232723; border-color: rgba(255, 255, 255, 0.35); }
+.ov-swatch-black.active { border-color: #fff; }
+.ov-swatch-mint { background: #8ce8bf; }
+
+.ov-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(245, 238, 220, 0.25);
+}
+
+.ov-opt {
+  background: none;
+  border: 1px solid rgba(245, 238, 220, 0.3);
+  color: rgba(245, 238, 220, 0.75);
+  font-family: var(--font-body);
+  font-size: 9px;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ov-opt:hover {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.ov-opt.active {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: var(--amber-glow);
 }
 
 /* ── Mini player (floating mode) ── */

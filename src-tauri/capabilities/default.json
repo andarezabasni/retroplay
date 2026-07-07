@@ -10,9 +10,12 @@
     "core:window:allow-set-always-on-top",
     "core:window:allow-set-decorations",
     "core:window:allow-unmaximize",
+    "core:window:allow-maximize",
     "core:window:allow-start-dragging",
     "core:window:allow-set-resizable",
     "core:window:allow-set-min-size",
+    "core:window:allow-set-shadow",
+    "core:window:allow-center",
     "dialog:default",
     "dialog:allow-open",
     "shell:default"
