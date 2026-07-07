@@ -354,6 +354,114 @@ body,
   color: var(--red);
 }
 
+.playlist-edit-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  font-family: var(--font-body);
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.playlist-item:hover .playlist-edit-btn {
+  opacity: 1;
+}
+
+.playlist-edit-btn:hover {
+  color: var(--amber);
+}
+
+/* ── Track toolbar (multi-select) ── */
+.track-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.select-mode-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 9px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.select-mode-btn:hover {
+  border-color: var(--amber-dim);
+  color: var(--amber);
+}
+
+.select-mode-btn.active {
+  border-color: var(--amber);
+  color: var(--amber-dim);
+  background: var(--amber-glow);
+}
+
+.select-remove-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--red);
+  font-family: var(--font-body);
+  font-size: 9px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.select-remove-btn:hover {
+  background: var(--red);
+  color: var(--bg-elevated);
+  border-color: var(--red);
+}
+
+.track-check {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-light);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--amber-dim);
+  transition: all 0.15s;
+}
+
+.track-check.checked {
+  border-color: var(--amber);
+  background: var(--amber-glow);
+}
+
+.track-remove-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  font-family: var(--font-body);
+  opacity: 0;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.track-item:hover .track-remove-btn {
+  opacity: 1;
+}
+
+.track-remove-btn:hover {
+  color: var(--red);
+}
+
 /* ── Add to Playlist dropdown ── */
 .add-to-playlist {
   margin-top: 8px;
@@ -722,7 +830,10 @@ body,
 }
 
 .lyrics-header {
-  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
   background: var(--teal);
   border-bottom: 1px solid var(--border);
   font-family: var(--font-display);
@@ -810,6 +921,329 @@ body,
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--amber-dim);
+}
+
+.lyrics-mode-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.lyrics-mode-btn {
+  background: none;
+  border: 1px solid rgba(245, 238, 220, 0.35);
+  color: var(--teal-text);
+  width: 22px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font-body);
+  transition: all 0.15s;
+}
+
+.lyrics-mode-btn:hover {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+/* ── Focus Lyrics View (Spotify-style) ── */
+.lyrics-focus {
+  grid-column: 1 / -1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.focus-close {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  z-index: 2;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  width: 30px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font-body);
+  transition: all 0.15s;
+}
+
+.focus-close:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.focus-header {
+  padding: 20px 60px 0;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.focus-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--teal);
+  letter-spacing: 1px;
+}
+
+.focus-artist {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+}
+
+.focus-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18vh 12%;
+  text-align: center;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-light) transparent;
+  scroll-behavior: smooth;
+}
+
+.focus-line {
+  padding: 10px 0;
+  font-size: 22px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.focus-line:hover {
+  color: var(--text-secondary);
+}
+
+.focus-line.active {
+  color: var(--amber);
+  font-weight: 500;
+  text-shadow: 0 0 18px var(--amber-glow);
+  transform: scale(1.05);
+}
+
+.focus-line.past {
+  color: var(--text-secondary);
+}
+
+/* ── Floating Lyrics Overlay ── */
+/* The window itself is transparent; only the lyric text shows until hover. */
+html.overlay-mode,
+html.overlay-mode body,
+html.overlay-mode #root {
+  background: transparent !important;
+}
+
+html.overlay-mode #root::after {
+  display: none; /* no scanlines over the desktop */
+}
+
+.lyrics-overlay {
+  position: relative;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px 16px;
+  background: transparent;
+  border-radius: 10px;
+  transition: background 0.2s;
+  user-select: none;
+  cursor: grab;
+  overflow: hidden;
+}
+
+.lyrics-overlay:hover {
+  background: rgba(40, 46, 43, 0.92);
+}
+
+.overlay-controls {
+  position: absolute;
+  top: 8px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.lyrics-overlay:hover .overlay-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.overlay-track {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 10px;
+  color: rgba(245, 238, 220, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overlay-line {
+  max-width: 100%;
+  text-align: center;
+  font-size: 26px;
+  line-height: 1.4;
+  color: #ffd76e;
+  text-shadow:
+    -1px -1px 0 rgba(0, 0, 0, 0.85),
+    1px -1px 0 rgba(0, 0, 0, 0.85),
+    -1px 1px 0 rgba(0, 0, 0, 0.85),
+    1px 1px 0 rgba(0, 0, 0, 0.85),
+    0 2px 10px rgba(0, 0, 0, 0.7);
+}
+
+.overlay-next {
+  max-width: 100%;
+  text-align: center;
+  font-size: 14px;
+  color: rgba(245, 238, 220, 0.85);
+  text-shadow:
+    -1px -1px 0 rgba(0, 0, 0, 0.8),
+    1px -1px 0 rgba(0, 0, 0, 0.8),
+    -1px 1px 0 rgba(0, 0, 0, 0.8),
+    1px 1px 0 rgba(0, 0, 0, 0.8);
+}
+
+/* ── Mini player (floating mode) ── */
+.mini-player {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--bg-surface);
+  border: 2px solid var(--teal);
+  padding: 8px 10px 8px;
+  user-select: none;
+  cursor: grab;
+  overflow: hidden;
+}
+
+.mini-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.mini-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mini-title {
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-artist {
+  font-size: 9px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-lyric {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--amber-dim);
+  overflow: hidden;
+  padding: 0 4px;
+}
+
+.mini-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mini-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.mini-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  width: 32px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font-body);
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.mini-btn:hover {
+  border-color: var(--amber-dim);
+  color: var(--amber);
+}
+
+.mini-expand {
+  border-color: var(--amber-dim);
+  color: var(--amber-dim);
+}
+
+.mini-expand:hover {
+  background: var(--amber);
+  color: var(--bg-deep);
+  border-color: var(--amber);
+}
+
+.mini-play {
+  color: var(--amber-dim);
+  border-color: var(--amber-dim);
+}
+
+.mini-progress {
+  flex: 1;
+  height: 5px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.mini-progress-fill {
+  height: 100%;
+  background: var(--amber);
+  transition: width 0.2s linear;
+}
+
+.mini-time {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Utilities ── */

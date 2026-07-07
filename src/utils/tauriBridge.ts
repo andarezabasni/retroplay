@@ -190,12 +190,126 @@ export async function savePlaylist(
   console.log(`[mock] savePlaylist("${name}", ${tracks.length} tracks)`);
 }
 
+export async function renamePlaylist(
+  folder: string,
+  oldName: string,
+  newName: string,
+): Promise<void> {
+  if (isTauri()) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke("rename_playlist", { folder, oldName, newName });
+  }
+  console.log(`[mock] renamePlaylist("${oldName}" → "${newName}")`);
+}
+
 export async function deletePlaylist(folder: string, name: string): Promise<void> {
   if (isTauri()) {
     const { invoke } = await import("@tauri-apps/api/core");
     return invoke("delete_playlist", { folder, name });
   }
   console.log(`[mock] deletePlaylist("${name}")`);
+}
+
+// ── Mini mode (floating always-on-top window) ──
+
+export interface WindowSnapshot {
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+}
+
+const MINI_W = 380;
+const MINI_H = 160;
+const OVERLAY_W = 760;
+const OVERLAY_H = 190;
+
+/** Main-window minimum size, matching tauri.conf.json. */
+const MAIN_MIN_W = 900;
+const MAIN_MIN_H = 600;
+
+/**
+ * Morph the main window into an undecorated always-on-top floating panel.
+ * Returns the previous window geometry so exitFloatMode can restore it.
+ */
+async function enterFloatWindow(
+  width: number,
+  height: number,
+  place: "bottom-right" | "bottom-center",
+): Promise<WindowSnapshot | null> {
+  if (!isTauri()) {
+    console.log(`[mock] enterFloatWindow(${width}×${height}, ${place})`);
+    return null;
+  }
+  const { getCurrentWindow, LogicalSize, LogicalPosition, currentMonitor } =
+    await import("@tauri-apps/api/window");
+  const win = getCurrentWindow();
+  // A maximized window would snapshot its maximized size; unmaximize first
+  // so restore returns to a sane floating size.
+  if (await win.isMaximized()) {
+    await win.unmaximize();
+  }
+  const factor = await win.scaleFactor();
+  const size = (await win.outerSize()).toLogical(factor);
+  const pos = (await win.outerPosition()).toLogical(factor);
+  const snapshot = { width: size.width, height: size.height, x: pos.x, y: pos.y };
+
+  await win.setDecorations(false);
+  await win.setAlwaysOnTop(true);
+  await win.setResizable(false);
+  // Clear the main window's min-size constraint — otherwise Windows clamps
+  // setSize back up to 900×600 and the floating panel never shrinks.
+  await win.setMinSize(null);
+  await win.setSize(new LogicalSize(width, height));
+
+  const mon = await currentMonitor();
+  if (mon) {
+    const mSize = mon.size.toLogical(mon.scaleFactor);
+    const mPos = mon.position.toLogical(mon.scaleFactor);
+    const x =
+      place === "bottom-right"
+        ? mPos.x + mSize.width - width - 16
+        : mPos.x + (mSize.width - width) / 2;
+    const y = mPos.y + mSize.height - height - 56;
+    await win.setPosition(new LogicalPosition(x, y));
+  }
+  return snapshot;
+}
+
+/** Mini player: bottom-right corner. */
+export function enterMiniMode(): Promise<WindowSnapshot | null> {
+  return enterFloatWindow(MINI_W, MINI_H, "bottom-right");
+}
+
+/** Floating lyrics overlay: wide bar at the bottom-center. */
+export function enterLyricsOverlay(): Promise<WindowSnapshot | null> {
+  return enterFloatWindow(OVERLAY_W, OVERLAY_H, "bottom-center");
+}
+
+/** Restore the main window from any floating mode. */
+export async function exitFloatMode(snap: WindowSnapshot | null): Promise<void> {
+  if (!isTauri()) {
+    console.log("[mock] exitFloatMode()");
+    return;
+  }
+  const { getCurrentWindow, LogicalSize, LogicalPosition } =
+    await import("@tauri-apps/api/window");
+  const win = getCurrentWindow();
+  await win.setAlwaysOnTop(false);
+  await win.setDecorations(true);
+  await win.setResizable(true);
+  await win.setMinSize(new LogicalSize(MAIN_MIN_W, MAIN_MIN_H));
+  await win.setSize(new LogicalSize(snap?.width ?? 1100, snap?.height ?? 720));
+  if (snap) {
+    await win.setPosition(new LogicalPosition(snap.x, snap.y));
+  }
+}
+
+/** Begin dragging the window (call from a mousedown handler). */
+export async function startWindowDrag(): Promise<void> {
+  if (!isTauri()) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().startDragging();
 }
 
 /** Returns true if running inside Tauri desktop app */

@@ -174,6 +174,23 @@ fn save_playlist(folder: String, name: String, tracks: Vec<String>) -> Result<()
 }
 
 #[tauri::command]
+fn rename_playlist(folder: String, old_name: String, new_name: String) -> Result<(), String> {
+    let old_name = safe_playlist_name(&old_name)?;
+    let new_name = safe_playlist_name(&new_name)?;
+    let dir = PathBuf::from(&folder).join(".playlists");
+    let old_path = dir.join(format!("{}.json", old_name));
+    let new_path = dir.join(format!("{}.json", new_name));
+    if !old_path.exists() {
+        return Err("Playlist tidak ditemukan.".into());
+    }
+    if new_path.exists() {
+        return Err("Nama playlist sudah dipakai.".into());
+    }
+    fs::rename(old_path, new_path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 fn delete_playlist(folder: String, name: String) -> Result<(), String> {
     let name = safe_playlist_name(&name)?;
     let path = PathBuf::from(&folder).join(".playlists").join(format!("{}.json", name));
@@ -572,6 +589,7 @@ pub fn run() {
             get_track_meta,
             load_playlists,
             save_playlist,
+            rename_playlist,
             delete_playlist,
             fetch_lyrics,
             download_audio

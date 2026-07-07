@@ -7,3 +7,5 @@ src-tauri/gen/schemas/
 # OS / editor cruft
 .DS_Store
 Thumbs.db
+
+AddFeature.md

@@ -13,9 +13,31 @@ paying for streaming, but still get lyrics when I want them.
 
 - Plays local MP3 files from any folder
 - Synced lyrics from LRCLIB that scroll with the song; click a line to jump
+- Three lyrics views: side panel, a big Spotify-style focus view, and
+  floating desktop lyrics that stay on top of other apps
+- Mini player: shrink the whole app into a small always-on-top card with
+  playback controls and the current lyric line
 - Add songs straight from a YouTube link inside the app
-- Playlists
+- Playlists: create, rename, multi-select songs to add, remove songs
 - Small footprint: it uses the system WebView, so the build is only a few MB
+
+## Lyrics views & mini player
+
+The buttons in the top-right of the Lyrics panel switch views:
+
+- **⛶ Focus** — big centered lyrics that fill the window, like Spotify's
+  lyrics screen. Press `Esc` or `✕` to go back.
+- **⬓ Floating lyrics** — the window turns into a transparent bar pinned
+  above every other app, showing just the current line. Hover over it to
+  reveal playback controls; drag it anywhere; double-click or `Esc` to
+  restore the full window.
+
+The **▣** button at the right end of the player bar switches to the mini
+player: a small floating card with the song title, controls, and the live
+lyric line. Drag it to move, double-click (or **⤢**) to restore.
+
+None of this can draw over the Windows lock screen (`Win+L`) — Windows
+doesn't allow any app to do that.
 
 ## Requirements
 
