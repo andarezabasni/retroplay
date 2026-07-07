@@ -22,13 +22,20 @@ paying for streaming, but still get lyrics when I want them.
 - Node.js 18+
 - Rust (with the Visual Studio C++ Build Tools on Windows)
 - yt-dlp and ffmpeg — only if you want to download music
+- Firefox, logged in to youtube.com — YouTube now rejects anonymous
+  downloads ("Sign in to confirm you're not a bot"), so the app reads
+  cookies from Firefox. Chrome doesn't work for this: its cookies are
+  encrypted in a way yt-dlp can't read on Windows.
 
-On Windows you can get the last two with:
+On Windows you can get yt-dlp and ffmpeg with:
 
 ```powershell
 winget install yt-dlp
 winget install ffmpeg
 ```
+
+Keep yt-dlp updated (`yt-dlp -U`) — YouTube changes things often, and an
+outdated yt-dlp is the most common reason downloads suddenly stop working.
 
 ## Running it (development)
 
@@ -46,11 +53,15 @@ Easiest way: pick your music folder in the app, paste a YouTube link into the
 box at the top left, and press Enter. The song downloads into that folder and
 shows up in the library.
 
-You can also download from the command line:
+You can also download from the command line (same flags the app uses):
 
 ```powershell
-yt-dlp -x --audio-format mp3 --audio-quality 0 --embed-metadata -o "%USERPROFILE%\Music\retroplay\%(artist,uploader)s - %(track,title)s.%(ext)s" "https://www.youtube.com/watch?v=VIDEO_ID"
+yt-dlp --cookies-from-browser firefox -4 -x --audio-format mp3 --audio-quality 0 --embed-metadata -o "%USERPROFILE%\Music\retroplay\%(artist,uploader)s - %(track,title)s.%(ext)s" "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
+
+If a download fails with "Sign in to confirm you're not a bot", open
+Firefox, sign in to youtube.com, and try again. The `-4` flag forces IPv4,
+which avoids YouTube's rate limiting (HTTP 429) on some IPv6 connections.
 
 Lyrics are matched by the song's title and artist, so the tags (or the file
 name) matter. If a track shows no lyrics, it's almost always because the

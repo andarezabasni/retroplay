@@ -476,22 +476,34 @@ async fn download_audio(
 
     let template = format!("{folder}/%(artist,uploader)s - %(track,title)s.%(ext)s");
 
-    let output = app
-        .shell()
-        .command("yt-dlp")
-        .args([
-            "-x",
-            "--audio-format",
-            "mp3",
-            "--audio-quality",
-            "0",
-            "--embed-metadata",
-            "--no-playlist",
-            "-o",
-            &template,
-            url,
-        ])
-        .output()
+    // YouTube menolak request anonim ("Sign in to confirm you're not a bot"),
+    // jadi pakai cookie dari Firefox yang sudah login. `-4` memaksa IPv4
+    // karena jalur IPv6 sering kena rate-limit (HTTP 429).
+    let base_args = [
+        "-x",
+        "--audio-format",
+        "mp3",
+        "--audio-quality",
+        "0",
+        "--embed-metadata",
+        "--no-playlist",
+        "-4",
+        "--socket-timeout",
+        "30",
+        "--retries",
+        "3",
+        "-o",
+        &template,
+        url,
+    ];
+
+    let run = |cookie_args: &'static [&'static str]| {
+        let mut args: Vec<&str> = cookie_args.to_vec();
+        args.extend_from_slice(&base_args);
+        app.shell().command("yt-dlp").args(args).output()
+    };
+
+    let mut output = run(&["--cookies-from-browser", "firefox"])
         .await
         .map_err(|e| {
             format!(
@@ -499,6 +511,19 @@ async fn download_audio(
                  terinstal (lihat PANDUAN.md)."
             )
         })?;
+
+    // Firefox tidak terpasang / profil tidak ditemukan → coba lagi tanpa cookie.
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.to_lowercase().contains("firefox") && stderr.to_lowercase().contains("cookie") {
+            output = run(&[]).await.map_err(|e| {
+                format!(
+                    "Tidak bisa menjalankan yt-dlp ({e}). Pastikan yt-dlp & ffmpeg \
+                     terinstal (lihat PANDUAN.md)."
+                )
+            })?;
+        }
+    }
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -509,7 +534,12 @@ async fn download_audio(
         } else {
             tail
         };
-        return Err(format!("Download gagal:\n{tail}"));
+        let hint = if tail.contains("Sign in to confirm") {
+            "\n\nTips: buka Firefox dan login ke youtube.com, lalu coba lagi."
+        } else {
+            ""
+        };
+        return Err(format!("Download gagal:\n{tail}{hint}"));
     }
 
     // Best-effort: ambil nama file hasil dari baris "Destination:" terakhir.
