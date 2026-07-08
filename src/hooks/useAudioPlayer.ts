@@ -54,7 +54,7 @@ export function useAudioPlayer(
       onTrackEndRef.current?.();
     };
     const onError = () => {
-      // Hanya laporkan bila memang ada sumber yang gagal dimuat
+      // Only report if there's a source that failed to load
       if (audio.src && audio.error) {
         setIsPlaying(false);
         onErrorRef.current?.();

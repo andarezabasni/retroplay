@@ -17,9 +17,27 @@ paying for streaming, but still get lyrics when I want them.
   floating desktop lyrics that stay on top of other apps
 - Mini player: shrink the whole app into a small always-on-top card with
   playback controls and the current lyric line
+- Offline lyrics cache: once lyrics sync, they're saved locally and work
+  without internet
+- Customizable lyrics overlay: choose text color, font, and size to match
+  any wallpaper brightness
 - Add songs straight from a YouTube link inside the app
 - Playlists: create, rename, multi-select songs to add, remove songs
 - Small footprint: it uses the system WebView, so the build is only a few MB
+
+## First Time Setup
+
+When you launch RetroPlay, a guide explains the four main features:
+
+1. **Playlists** — organize your music into custom collections
+2. **Mini Player** — floating card that stays on top of other windows
+3. **Lyrics Views** — three ways to read: side panel, center focus, or overlay
+4. **Offline Cache** — lyrics save locally once synced, no internet needed
+
+You can dismiss this guide anytime—it won't show again unless you clear
+browser storage. To see it again, open the browser's developer tools
+(`F12`), go to Storage → Local Storage, and delete the
+`retroplay_onboarding_shown` entry.
 
 ## Lyrics views & mini player
 
@@ -29,12 +47,15 @@ The buttons in the top-right of the Lyrics panel switch views:
   lyrics screen. Press `Esc` or `✕` to go back.
 - **⬓ Floating lyrics** — the window turns into a transparent bar pinned
   above every other app, showing just the current line. Hover over it to
-  reveal playback controls; drag it anywhere; double-click or `Esc` to
-  restore the full window.
+  reveal playback controls and text style options; drag it anywhere;
+  double-click or `Esc` to restore the full window.
 
 The **▣** button at the right end of the player bar switches to the mini
 player: a small floating card with the song title, controls, and the live
 lyric line. Drag it to move, double-click (or **⤢**) to restore.
+
+When the floating lyrics overlay is active, click the gear icon (⚙) to
+customize text color, font, and size. These settings persist across restarts.
 
 None of this can draw over the Windows lock screen (`Win+L`) — Windows
 doesn't allow any app to do that.
@@ -110,5 +131,14 @@ WebView2, which is why the installer is the safer thing to share.
 
 Lyrics come from [LRCLIB](https://lrclib.net), a free public API. MP3 tags and
 durations are read in Rust (id3 + mp3-duration). Playlists are saved as JSON in
-a `.playlists` folder next to your music. The UI is React, and Tauri wraps it in
+a `.playlists` folder next to your music. Lyrics are cached in a `.lyrics`
+folder so they're available offline. The UI is React, and Tauri wraps it in
 a native window using the system WebView instead of bundling a whole browser.
+
+## Credits
+
+**Made by:** [andreza.dev](https://instagram.com/andreza.dev)
+
+Find me on:
+- **GitHub:** [@andarezabasni](https://github.com/andarezabasni)
+- **Instagram:** [@andreza.dev](https://instagram.com/andreza.dev)

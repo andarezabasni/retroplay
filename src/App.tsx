@@ -21,6 +21,8 @@ import {
 import { parseLrc, findActiveLine, LrcLine } from "./utils/lrc";
 import { formatTime } from "./utils/format";
 import { CachedLyrics } from "./utils/types";
+import { OnboardingModal } from "./components/OnboardingModal";
+import { AboutModal } from "./components/AboutModal";
 import "./styles/retro.css";
 
 export default function App() {
@@ -72,6 +74,8 @@ export default function App() {
   const [downloading, setDownloading] = useState(false);
   const [downloadMsg, setDownloadMsg] = useState("");
   const [playbackError, setPlaybackError] = useState("");
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const lyricsReq = useRef(0);
 
@@ -97,9 +101,17 @@ export default function App() {
   }, [sourceTracks.length, currentIndex]);
 
   const player = useAudioPlayer(handleTrackEnd, () =>
-    setPlaybackError("Gagal memutar track — file mungkin rusak atau hilang.")
+    setPlaybackError("Failed to play track — file might be corrupted or missing.")
   );
   playerRef.current = player;
+
+  // Check onboarding status on mount
+  useEffect(() => {
+    const hasSeenOnboarding = localStorage.getItem("retroplay_onboarding_shown") === "true";
+    if (!hasSeenOnboarding) {
+      setShowOnboarding(true);
+    }
+  }, []);
 
   // Scan folder on load (or auto-mock in browser)
   useEffect(() => {
@@ -135,7 +147,7 @@ export default function App() {
     const url = ytUrl.trim();
     if (!url || !musicFolder || downloading) return;
     setDownloading(true);
-    setDownloadMsg("Mengunduh… (bisa 1–2 menit)");
+    setDownloadMsg("Downloading… (can take 1–2 minutes)");
     try {
       const result = await downloadAudio(musicFolder, url);
       setDownloadMsg(`✓ ${result}`);
@@ -696,7 +708,7 @@ export default function App() {
                   className="yt-btn"
                   onClick={handleDownload}
                   disabled={downloading || !ytUrl.trim()}
-                  title="Download lagu dari link"
+                  title="Download song from link"
                 >
                   {downloading ? "…" : "↓"}
                 </button>
@@ -1040,8 +1052,32 @@ export default function App() {
               title="Mini player"
             >▣</button>
           )}
+          <button
+            className="ctrl-btn about-toggle"
+            onClick={() => setShowAbout(true)}
+            title="About"
+          >⚙</button>
+        </div>
+
+        <div className="player-footer">
+          <a
+            href="https://github.com/andarezabasni"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="footer-credit"
+          >
+            RetroPlay by andreza.dev
+          </a>
         </div>
       </div>
+
+      {/* ── Modals ── */}
+      {showOnboarding && (
+        <OnboardingModal onClose={() => setShowOnboarding(false)} />
+      )}
+      {showAbout && (
+        <AboutModal onClose={() => setShowAbout(false)} />
+      )}
     </div>
   );
 }

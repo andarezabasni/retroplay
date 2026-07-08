@@ -157,7 +157,7 @@ fn safe_playlist_name(name: &str) -> Result<String, String> {
         || n.contains("..")
         || n.contains(':')
     {
-        return Err("Nama playlist tidak valid.".into());
+        return Err("Invalid playlist name.".into());
     }
     Ok(n.to_string())
 }
@@ -181,10 +181,10 @@ fn rename_playlist(folder: String, old_name: String, new_name: String) -> Result
     let old_path = dir.join(format!("{}.json", old_name));
     let new_path = dir.join(format!("{}.json", new_name));
     if !old_path.exists() {
-        return Err("Playlist tidak ditemukan.".into());
+        return Err("Playlist not found.".into());
     }
     if new_path.exists() {
-        return Err("Nama playlist sudah dipakai.".into());
+        return Err("Playlist name already in use.".into());
     }
     fs::rename(old_path, new_path).map_err(|e| e.to_string())?;
     Ok(())
@@ -540,17 +540,16 @@ async fn download_audio(
 
     let url = url.trim();
     if !(url.starts_with("http://") || url.starts_with("https://")) {
-        return Err("URL tidak valid — tempel link YouTube lengkap.".into());
+        return Err("Invalid URL — paste complete YouTube link.".into());
     }
     if folder.trim().is_empty() {
-        return Err("Pilih folder musik dulu.".into());
+        return Err("Select music folder first.".into());
     }
 
     let template = format!("{folder}/%(artist,uploader)s - %(track,title)s.%(ext)s");
 
-    // YouTube menolak request anonim ("Sign in to confirm you're not a bot"),
-    // jadi pakai cookie dari Firefox yang sudah login. `-4` memaksa IPv4
-    // karena jalur IPv6 sering kena rate-limit (HTTP 429).
+    // YouTube blocks anonymous requests ("Sign in to confirm you're not a bot"),
+    // so use Firefox cookies. `-4` forces IPv4 to avoid rate limiting (HTTP 429).
     let base_args = [
         "-x",
         "--audio-format",
@@ -579,19 +578,17 @@ async fn download_audio(
         .await
         .map_err(|e| {
             format!(
-                "Tidak bisa menjalankan yt-dlp ({e}). Pastikan yt-dlp & ffmpeg \
-                 terinstal (lihat PANDUAN.md)."
+                "Cannot run yt-dlp ({e}). Make sure yt-dlp & ffmpeg are installed (see GUIDE.md)."
             )
         })?;
 
-    // Firefox tidak terpasang / profil tidak ditemukan → coba lagi tanpa cookie.
+    // Firefox not installed / profile not found → try again without cookies.
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         if stderr.to_lowercase().contains("firefox") && stderr.to_lowercase().contains("cookie") {
             output = run(&[]).await.map_err(|e| {
                 format!(
-                    "Tidak bisa menjalankan yt-dlp ({e}). Pastikan yt-dlp & ffmpeg \
-                     terinstal (lihat PANDUAN.md)."
+                    "Cannot run yt-dlp ({e}). Make sure yt-dlp & ffmpeg are installed (see GUIDE.md)."
                 )
             })?;
         }
@@ -602,19 +599,19 @@ async fn download_audio(
         let tail: Vec<&str> = stderr.lines().rev().take(3).collect();
         let tail: String = tail.into_iter().rev().collect::<Vec<_>>().join("\n");
         let tail = if tail.trim().is_empty() {
-            "yt-dlp gagal tanpa pesan.".to_string()
+            "yt-dlp failed without message.".to_string()
         } else {
             tail
         };
         let hint = if tail.contains("Sign in to confirm") {
-            "\n\nTips: buka Firefox dan login ke youtube.com, lalu coba lagi."
+            "\n\nTip: open Firefox and log in to youtube.com, then try again."
         } else {
             ""
         };
-        return Err(format!("Download gagal:\n{tail}{hint}"));
+        return Err(format!("Download failed:\n{tail}{hint}"));
     }
 
-    // Best-effort: ambil nama file hasil dari baris "Destination:" terakhir.
+    // Best-effort: extract filename from last "Destination:" line.
     let stdout = String::from_utf8_lossy(&output.stdout);
     let name = stdout
         .lines()
@@ -629,8 +626,8 @@ async fn download_audio(
         .last();
 
     Ok(match name {
-        Some(n) => format!("Ditambahkan: {n}"),
-        None => "Lagu berhasil diunduh".to_string(),
+        Some(n) => format!("Added: {n}"),
+        None => "Song downloaded successfully".to_string(),
     })
 }
 

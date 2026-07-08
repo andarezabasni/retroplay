@@ -168,7 +168,7 @@ export async function downloadAudio(folder: string, url: string): Promise<string
   // Browser mock — simulate a download delay
   await new Promise((r) => setTimeout(r, 1200));
   console.log(`[mock] downloadAudio("${url}")`);
-  return "Mock Song berhasil diunduh";
+  return "Mock Song downloaded successfully";
 }
 
 export async function loadPlaylists(folder: string): Promise<Record<string, Track[]>> {
