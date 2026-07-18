@@ -42,7 +42,7 @@
       "icons/icon.ico",
       "icons/icon.png"
     ],
-    "category": "AudioVideo",
+    "category": "Music",
     "shortDescription": "Pemutar musik offline dengan lirik tersinkron",
     "longDescription": "RetroPlay — pemutar musik desktop offline dengan lirik tersinkron dan estetika retro.",
     "windows": {
