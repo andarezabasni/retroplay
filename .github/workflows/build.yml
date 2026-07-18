@@ -36,7 +36,7 @@ jobs:
           node-version: '20'
 
       - name: Install Rust stable
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
@@ -48,46 +48,50 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'RetroPlay ${{ github.ref_name }}'
-          releaseBody: 'See CHANGELOG.md for details.'
-          releaseDraft: true
-          prerelease: false
-          target: ${{ matrix.target }}
-          args: ''
+      - name: Build frontend
+        run: npm run build
 
-  # Create a combined release with all artifacts
+      - name: Build Tauri app
+        run: npm run tauri build -- --target ${{ matrix.target }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: retroplay-${{ matrix.target }}
+          path: src-tauri/target/release/bundle/
+          if-no-files-found: warn
+
   release:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
-      - name: Get version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: RetroPlay ${{ github.ref_name }}
+          body: |
+            ## RetroPlay ${{ github.ref_name }}
 
-      - name: Create release notes
-        run: |
-          echo "## RetroPlay ${{ steps.get_version.outputs.VERSION }}" > release_notes.md
-          echo "" >> release_notes.md
-          echo "### Downloads" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "| Platform | File |" >> release_notes.md
-          echo "|----------|------|" >> release_notes.md
-          echo "| Linux (Debian/Ubuntu) | \`retroplay_*_amd64.deb\` |" >> release_notes.md
-          echo "| Linux (AppImage) | \`retroplay_*_amd64.AppImage\` |" >> release_notes.md
-          echo "| macOS (Apple Silicon) | \`RetroPlay_*_aarch64.dmg\` |" >> release_notes.md
-          echo "| macOS (Intel) | \`RetroPlay_*_x64.dmg\` |" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "### System Requirements" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "- **Linux**: Ubuntu 22.04+, Debian 12+, Fedora 39+, or compatible distro with webkit2gtk 4.1" >> release_notes.md
-          echo "- **macOS**: macOS 10.15 (Catalina) or later" >> release_notes.md
+            ### Downloads
+
+            | Platform | File |
+            |----------|------|
+            | Linux (Debian/Ubuntu) | `retroplay_*_amd64.deb` |
+            | Linux (AppImage) | `retroplay_*_amd64.AppImage` |
+            | macOS (Apple Silicon) | `RetroPlay_*_aarch64.dmg` |
+            | macOS (Intel) | `RetroPlay_*_x64.dmg` |
+
+            ### System Requirements
+
+            - **Linux**: Ubuntu 22.04+, Debian 12+, Fedora 39+, or compatible distro with webkit2gtk 4.1
+            - **macOS**: macOS 10.15 (Catalina) or later
+          draft: true
+          prerelease: false
+          files: artifacts/**/*
