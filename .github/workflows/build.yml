@@ -57,11 +57,26 @@ jobs:
       - name: Build Tauri app
         run: npm run tauri build -- --target ${{ matrix.target }}
 
+      - name: Find distributable files
+        run: |
+          case "${{ matrix.target }}" in
+            *linux*)
+              mkdir -p dist-files
+              cp src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb dist-files/ 2>/dev/null || true
+              cp src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage dist-files/ 2>/dev/null || true
+              ;;
+            *apple*)
+              mkdir -p dist-files
+              cp src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg dist-files/ 2>/dev/null || true
+              ;;
+          esac
+          ls -la dist-files/
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: retroplay-${{ matrix.target }}
-          path: src-tauri/target/${{ matrix.target }}/release/bundle/
+          path: dist-files/
           if-no-files-found: error
 
   release:
