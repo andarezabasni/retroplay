@@ -62,19 +62,51 @@ doesn't allow any app to do that.
 
 ## Requirements
 
+### Common
 - Node.js 18+
-- Rust (with the Visual Studio C++ Build Tools on Windows)
+- Rust
 - yt-dlp and ffmpeg — only if you want to download music
 - Firefox, logged in to youtube.com — YouTube now rejects anonymous
   downloads ("Sign in to confirm you're not a bot"), so the app reads
-  cookies from Firefox. Chrome doesn't work for this: its cookies are
-  encrypted in a way yt-dlp can't read on Windows.
+  cookies from Firefox.
 
-On Windows you can get yt-dlp and ffmpeg with:
+### Windows
+- Visual Studio C++ Build Tools
 
 ```powershell
 winget install yt-dlp
 winget install ffmpeg
+```
+
+### Linux (Ubuntu/Debian)
+
+```bash
+# Rust dependencies
+sudo apt update
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+# Optional: for downloading music
+sudo apt install yt-dlp ffmpeg
+```
+
+### Linux (Fedora/RHEL)
+
+```bash
+# Rust dependencies
+sudo dnf install webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel librsvg2-devel
+
+# Optional: for downloading music
+sudo dnf install yt-dlp ffmpeg
+```
+
+### Linux (Arch)
+
+```bash
+# Rust dependencies
+sudo pacman -S webkit2gtk-4.1 gtk3 libayatana-appindicator librsvg
+
+# Optional: for downloading music
+sudo pacman -S yt-dlp ffmpeg
 ```
 
 Keep yt-dlp updated (`yt-dlp -U`) — YouTube changes things often, and an
@@ -82,7 +114,7 @@ outdated yt-dlp is the most common reason downloads suddenly stop working.
 
 ## Running it (development)
 
-```powershell
+```bash
 npm install
 npm run tauri dev
 ```
@@ -114,9 +146,11 @@ before searching, so older downloads usually still work.
 
 ## Building
 
-```powershell
+```bash
 npm run tauri build
 ```
+
+### Windows
 
 You get two things under `src-tauri/target/release/`:
 
@@ -126,6 +160,32 @@ You get two things under `src-tauri/target/release/`:
 
 On Windows 11 the plain exe just runs. Older Windows installs may be missing
 WebView2, which is why the installer is the safer thing to share.
+
+### Linux
+
+You get under `src-tauri/target/release/bundle/`:
+
+- `deb/retroplay_1.0.0_amd64.deb` — Debian/Ubuntu package
+- `appimage/retroplay_1.0.0_amd64.AppImage` — Portable AppImage (works on most distros)
+
+Install the `.deb` with:
+```bash
+sudo dpkg -i retroplay_1.0.0_amd64.deb
+sudo apt-get install -f  # Fix missing dependencies
+```
+
+Run the AppImage:
+```bash
+chmod +x retroplay_1.0.0_amd64.AppImage
+./retroplay_1.0.0_amd64.AppImage
+```
+
+### macOS
+
+You get under `src-tauri/target/release/bundle/`:
+
+- `macos/RetroPlay.app` — macOS application bundle
+- `dmg/RetroPlay_1.0.0_x64.dmg` — DMG installer
 
 ## How it works
 

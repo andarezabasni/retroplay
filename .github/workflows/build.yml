@@ -1,0 +1,93 @@
+name: Build RetroPlay
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            target: 'aarch64-apple-darwin'
+          - platform: 'macos-latest'
+            target: 'x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            target: 'x86_64-unknown-linux-gnu'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'RetroPlay ${{ github.ref_name }}'
+          releaseBody: 'See CHANGELOG.md for details.'
+          releaseDraft: true
+          prerelease: false
+          target: ${{ matrix.target }}
+          args: ''
+
+  # Create a combined release with all artifacts
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create release notes
+        run: |
+          echo "## RetroPlay ${{ steps.get_version.outputs.VERSION }}" > release_notes.md
+          echo "" >> release_notes.md
+          echo "### Downloads" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "| Platform | File |" >> release_notes.md
+          echo "|----------|------|" >> release_notes.md
+          echo "| Linux (Debian/Ubuntu) | \`retroplay_*_amd64.deb\` |" >> release_notes.md
+          echo "| Linux (AppImage) | \`retroplay_*_amd64.AppImage\` |" >> release_notes.md
+          echo "| macOS (Apple Silicon) | \`RetroPlay_*_aarch64.dmg\` |" >> release_notes.md
+          echo "| macOS (Intel) | \`RetroPlay_*_x64.dmg\` |" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "### System Requirements" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "- **Linux**: Ubuntu 22.04+, Debian 12+, Fedora 39+, or compatible distro with webkit2gtk 4.1" >> release_notes.md
+          echo "- **macOS**: macOS 10.15 (Catalina) or later" >> release_notes.md
