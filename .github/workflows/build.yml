@@ -21,6 +21,8 @@ jobs:
             target: 'x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
             target: 'x86_64-unknown-linux-gnu'
+          - platform: 'windows-latest'
+            target: 'x86_64-pc-windows-msvc'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -58,6 +60,7 @@ jobs:
         run: npm run tauri build -- --target ${{ matrix.target }}
 
       - name: Find distributable files
+        shell: bash
         run: |
           case "${{ matrix.target }}" in
             *linux*)
@@ -68,6 +71,10 @@ jobs:
             *apple*)
               mkdir -p dist-files
               cp src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg dist-files/ 2>/dev/null || true
+              ;;
+            *windows*)
+              mkdir -p dist-files
+              find src-tauri/target/${{ matrix.target }}/release/bundle -type f \( -name '*.exe' -o -name '*.msi' \) -exec cp {} dist-files/ \; 2>/dev/null || true
               ;;
           esac
           ls -la dist-files/
@@ -103,6 +110,7 @@ jobs:
             |----------|------|
             | Linux (Debian/Ubuntu) | `retroplay_*_amd64.deb` |
             | Linux (AppImage) | `retroplay_*_amd64.AppImage` |
+            | Windows | `RetroPlay_*_x64-setup.exe` |
             | macOS (Apple Silicon) | `RetroPlay_*_aarch64.dmg` |
             | macOS (Intel) | `RetroPlay_*_x64.dmg` |
 
