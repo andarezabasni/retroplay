@@ -15,10 +15,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest'
-            target: 'aarch64-apple-darwin'
-          - platform: 'macos-latest'
-            target: 'x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
             target: 'x86_64-unknown-linux-gnu'
           - platform: 'windows-latest'
@@ -53,6 +49,40 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Fetch sidecar binaries (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $triple = "${{ matrix.target }}"
+          $dir = "src-tauri/binaries"
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          # yt-dlp
+          curl.exe -L --retry 3 --ssl-no-revoke -o "$dir/yt-dlp-$triple.exe" `
+            "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+          # ffmpeg
+          curl.exe -L --retry 3 --ssl-no-revoke -o "$env:TEMP/ffmpeg.zip" `
+            "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          Expand-Archive -Path "$env:TEMP/ffmpeg.zip" -DestinationPath "$env:TEMP/ffmpeg" -Force
+          $ff = Get-ChildItem "$env:TEMP/ffmpeg" -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          Copy-Item $ff.FullName "$dir/ffmpeg-$triple.exe" -Force
+
+      - name: Fetch sidecar binaries (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          triple="${{ matrix.target }}"
+          dir="src-tauri/binaries"
+          # yt-dlp (static Linux binary)
+          curl -L --retry 3 -o "$dir/yt-dlp-$triple" \
+            "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"
+          chmod +x "$dir/yt-dlp-$triple"
+          # ffmpeg (static build from John Van Sickle)
+          curl -L --retry 3 -o /tmp/ffmpeg.tar.xz \
+            "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
+          mkdir -p /tmp/ffmpeg && tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg --strip-components=1
+          cp /tmp/ffmpeg/ffmpeg "$dir/ffmpeg-$triple"
+          chmod +x "$dir/ffmpeg-$triple"
+
       - name: Build frontend
         run: npm run build
 
@@ -67,10 +97,6 @@ jobs:
               mkdir -p dist-files
               cp src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb dist-files/ 2>/dev/null || true
               cp src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage dist-files/ 2>/dev/null || true
-              ;;
-            *apple*)
-              mkdir -p dist-files
-              cp src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg dist-files/ 2>/dev/null || true
               ;;
             *windows*)
               mkdir -p dist-files
@@ -111,13 +137,22 @@ jobs:
             | Linux (Debian/Ubuntu) | `retroplay_*_amd64.deb` |
             | Linux (AppImage) | `retroplay_*_amd64.AppImage` |
             | Windows | `RetroPlay_*_x64-setup.exe` |
-            | macOS (Apple Silicon) | `RetroPlay_*_aarch64.dmg` |
-            | macOS (Intel) | `RetroPlay_*_x64.dmg` |
+
+            ### What's new in v3.0.0
+
+            - **Single install** — `yt-dlp` and `ffmpeg` are now bundled with the
+              app. No need to install them separately anymore.
+            - **Automatic cookie detection** — YouTube downloads try without
+              cookies first, then automatically use cookies from any installed
+              browser (Firefox, Chrome, Edge, Brave, Chromium, Opera, Vivaldi)
+              when a sign-in is required.
+            - **Collapsible playlists** — the playlist panel can be hidden and
+              scrolls independently, so long playlist lists no longer push the
+              track list off-screen. Long names are truncated cleanly.
 
             ### System Requirements
 
             - **Linux**: Ubuntu 22.04+, Debian 12+, Fedora 39+, or compatible distro with webkit2gtk 4.1
-            - **macOS**: macOS 10.15 (Catalina) or later
           draft: true
           prerelease: false
           files: artifacts/**/*
