@@ -527,18 +527,56 @@ async fn fetch_lyrics(
     Ok(result)
 }
 
-/// Download audio from a URL (e.g. YouTube) as MP3 into `folder` using the
-/// system `yt-dlp` (which uses ffmpeg internally). Returns a short message
-/// naming the downloaded track on success.
+/// Path to the bundled ffmpeg sidecar, if present. Tauri copies sidecars next
+/// to the main executable with the target-triple suffix stripped at runtime.
+fn bundled_ffmpeg_path() -> Option<PathBuf> {
+    let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    let name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
+    let p = dir.join(name);
+    if p.exists() {
+        Some(p)
+    } else {
+        None
+    }
+}
+
+/// Run yt-dlp with `args`: prefer the bundled sidecar, fall back to a system
+/// `yt-dlp` on PATH (for users who already have it installed).
+async fn run_ytdlp(
+    app: &tauri::AppHandle,
+    args: Vec<String>,
+) -> Result<tauri_plugin_shell::process::Output, String> {
+    use tauri_plugin_shell::ShellExt;
+
+    // Bundled sidecar first — this is the "single install" path.
+    if let Ok(cmd) = app.shell().sidecar("yt-dlp") {
+        if let Ok(out) = cmd.args(args.clone()).output().await {
+            return Ok(out);
+        }
+    }
+
+    // Fall back to a yt-dlp already installed on the system PATH.
+    app.shell()
+        .command("yt-dlp")
+        .args(args)
+        .output()
+        .await
+        .map_err(|e| {
+            format!("Cannot run yt-dlp ({e}). The bundled downloader is missing and no system yt-dlp was found.")
+        })
+}
+
+/// Download audio from a URL (e.g. YouTube) as MP3 into `folder`. Uses the
+/// bundled yt-dlp + ffmpeg sidecars (falling back to system installs), and
+/// automatically detects which browser's cookies work when YouTube demands a
+/// sign-in. Returns a short message naming the downloaded track on success.
 #[tauri::command]
 async fn download_audio(
     app: tauri::AppHandle,
     folder: String,
     url: String,
 ) -> Result<String, String> {
-    use tauri_plugin_shell::ShellExt;
-
-    let url = url.trim();
+    let url = url.trim().to_string();
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err("Invalid URL — paste complete YouTube link.".into());
     }
@@ -547,50 +585,95 @@ async fn download_audio(
     }
 
     let template = format!("{folder}/%(artist,uploader)s - %(track,title)s.%(ext)s");
+    let ffmpeg = bundled_ffmpeg_path();
 
-    // YouTube blocks anonymous requests ("Sign in to confirm you're not a bot"),
-    // so use Firefox cookies. `-4` forces IPv4 to avoid rate limiting (HTTP 429).
-    let base_args = [
-        "-x",
-        "--audio-format",
-        "mp3",
-        "--audio-quality",
-        "0",
-        "--embed-metadata",
-        "--no-playlist",
-        "-4",
-        "--socket-timeout",
-        "30",
-        "--retries",
-        "3",
-        "-o",
-        &template,
-        url,
-    ];
-
-    let run = |cookie_args: &'static [&'static str]| {
-        let mut args: Vec<&str> = cookie_args.to_vec();
-        args.extend_from_slice(&base_args);
-        app.shell().command("yt-dlp").args(args).output()
+    // Build the yt-dlp argument list, optionally pulling cookies from `browser`.
+    // `-4` forces IPv4 to avoid rate limiting (HTTP 429).
+    let build_args = |browser: Option<&str>| -> Vec<String> {
+        let mut args: Vec<String> = Vec::new();
+        if let Some(b) = browser {
+            args.push("--cookies-from-browser".into());
+            args.push(b.into());
+        }
+        // Point yt-dlp at the bundled ffmpeg so users don't need it on PATH.
+        if let Some(f) = &ffmpeg {
+            args.push("--ffmpeg-location".into());
+            args.push(f.to_string_lossy().to_string());
+        }
+        for a in [
+            "-x",
+            "--audio-format",
+            "mp3",
+            "--audio-quality",
+            "0",
+            "--embed-metadata",
+            "--no-playlist",
+            "-4",
+            "--socket-timeout",
+            "30",
+            "--retries",
+            "3",
+            "-o",
+            &template,
+            &url,
+        ] {
+            args.push(a.to_string());
+        }
+        args
     };
 
-    let mut output = run(&["--cookies-from-browser", "firefox"])
-        .await
-        .map_err(|e| {
-            format!(
-                "Cannot run yt-dlp ({e}). Make sure yt-dlp & ffmpeg are installed (see GUIDE.md)."
-            )
-        })?;
+    // 1. Try without cookies first — many videos download fine, and it's fast.
+    let mut output = run_ytdlp(&app, build_args(None)).await?;
 
-    // Firefox not installed / profile not found → try again without cookies.
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if stderr.to_lowercase().contains("firefox") && stderr.to_lowercase().contains("cookie") {
-            output = run(&[]).await.map_err(|e| {
-                format!(
-                    "Cannot run yt-dlp ({e}). Make sure yt-dlp & ffmpeg are installed (see GUIDE.md)."
-                )
-            })?;
+    // 2. If YouTube demands a sign-in ("Sign in to confirm you're not a bot"),
+    // try each installed browser's cookies until one works. Browsers that
+    // aren't installed (no cookie database) are skipped quietly.
+    let looks_like_bot_check = |o: &tauri_plugin_shell::process::Output| -> bool {
+        if o.status.success() {
+            return false;
+        }
+        let e = String::from_utf8_lossy(&o.stderr).to_lowercase();
+        e.contains("sign in to confirm")
+            || e.contains("confirm you're not a bot")
+            || e.contains("this video is only available")
+    };
+
+    if looks_like_bot_check(&output) {
+        // Firefox first: its cookie DB is readable even while the browser is
+        // open, unlike Chrome/Edge which lock (and encrypt) theirs on Windows.
+        let browsers = [
+            "firefox", "chrome", "edge", "brave", "chromium", "opera", "vivaldi",
+        ];
+        let mut cookie_worked = false;
+        let mut any_browser_found = false;
+
+        for b in browsers {
+            let o = run_ytdlp(&app, build_args(Some(b))).await?;
+            if o.status.success() {
+                output = o;
+                cookie_worked = true;
+                break;
+            }
+            let e = String::from_utf8_lossy(&o.stderr).to_lowercase();
+            let browser_missing = e.contains("could not find")
+                || e.contains("no such")
+                || e.contains("does not exist")
+                || (e.contains(b) && e.contains("cookie") && e.contains("not"));
+            if !browser_missing {
+                // Browser exists but the attempt still failed — keep this
+                // richer error to surface if nothing ends up working.
+                any_browser_found = true;
+                output = o;
+            }
+        }
+
+        if !cookie_worked && !any_browser_found {
+            return Err(
+                "YouTube requires a sign-in for this video, but no browser cookies were found.\n\n\
+                 Install a browser and log in to youtube.com — Firefox is recommended because its \
+                 cookies work even while it's open. Then try again."
+                    .into(),
+            );
         }
     }
 
@@ -603,8 +686,8 @@ async fn download_audio(
         } else {
             tail
         };
-        let hint = if tail.contains("Sign in to confirm") {
-            "\n\nTip: open Firefox and log in to youtube.com, then try again."
+        let hint = if tail.to_lowercase().contains("sign in to confirm") {
+            "\n\nTip: install and log in to a browser at youtube.com (Firefox recommended), then try again."
         } else {
             ""
         };

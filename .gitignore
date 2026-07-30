@@ -4,6 +4,11 @@ src-tauri/target/
 src-tauri/gen/schemas/
 .vite/
 
+# Bundled sidecar binaries — large, fetched via src-tauri/binaries/download.ps1
+src-tauri/binaries/*
+!src-tauri/binaries/README.md
+!src-tauri/binaries/download.ps1
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db

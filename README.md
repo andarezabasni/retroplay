@@ -15,9 +15,13 @@ RetroPlay is an offline desktop music player for local MP3s. It supports synced 
 ## Requirements
 - Node.js 18+
 - Rust
-- `yt-dlp` and `ffmpeg` (only if you want downloads)
-- Firefox logged in to YouTube (for cookie-based downloads)
 - Windows: Visual Studio C++ Build Tools
+
+`yt-dlp` and `ffmpeg` are **bundled** with the app (see below), so end users do
+not need to install them separately. YouTube cookie handling is automatic:
+RetroPlay tries downloading without cookies first, and only if YouTube demands a
+sign-in does it automatically try cookies from any installed browser (Firefox,
+Chrome, Edge, Brave, Chromium, Opera, Vivaldi).
 
 ### Linux
 Install the Tauri system dependencies for your distro.
@@ -40,9 +44,17 @@ npm run dev
 ```
 
 ## Build
+
+Before building, fetch the bundled `yt-dlp` and `ffmpeg` binaries once:
+```powershell
+cd src-tauri/binaries
+./download.ps1
+```
+Then build:
 ```bash
 npm run tauri build
 ```
+See [src-tauri/binaries/README.md](src-tauri/binaries/README.md) for details.
 
 ## Project structure
 - `src/` — React frontend
