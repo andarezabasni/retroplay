@@ -40,6 +40,9 @@ export default function App() {
   const [activePlaylist, setActivePlaylist] = useState<string | null>(null);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [showPlaylistInput, setShowPlaylistInput] = useState(false);
+  const [playlistsCollapsed, setPlaylistsCollapsed] = useState<boolean>(
+    () => localStorage.getItem("retroplay_playlists_collapsed") === "true"
+  );
   const [editingPlaylist, setEditingPlaylist] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [selectMode, setSelectMode] = useState(false);
@@ -70,6 +73,12 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("retroplay_overlay_style", JSON.stringify(overlayStyle));
   }, [overlayStyle]);
+  useEffect(() => {
+    localStorage.setItem(
+      "retroplay_playlists_collapsed",
+      String(playlistsCollapsed)
+    );
+  }, [playlistsCollapsed]);
   const [ytUrl, setYtUrl] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [downloadMsg, setDownloadMsg] = useState("");
@@ -720,76 +729,94 @@ export default function App() {
 
         {/* ── Playlists ── */}
         {musicFolder && (
-          <div className="playlist-section">
-            <div className="playlist-header">
-              <span className="playlist-title">PLAYLISTS</span>
+          <div className={`playlist-section ${playlistsCollapsed ? "collapsed" : ""}`}>
+            <div
+              className="playlist-header"
+              onClick={() => setPlaylistsCollapsed((c) => !c)}
+              title={playlistsCollapsed ? "Show playlists" : "Hide playlists"}
+            >
+              <span className="playlist-title">
+                <span className="playlist-chevron">{playlistsCollapsed ? "▸" : "▾"}</span>
+                PLAYLISTS
+                <span className="playlist-total">{Object.keys(playlists).length}</span>
+              </span>
               <button
                 className="playlist-add-btn"
-                onClick={() => setShowPlaylistInput(!showPlaylistInput)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPlaylistsCollapsed(false);
+                  setShowPlaylistInput(!showPlaylistInput);
+                }}
                 title="New playlist"
               >+</button>
             </div>
-            {showPlaylistInput && (
-              <div className="playlist-input-row">
-                <input
-                  className="playlist-name-input"
-                  type="text"
-                  placeholder="Playlist name..."
-                  value={newPlaylistName}
-                  onChange={(e) => setNewPlaylistName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && createPlaylist()}
-                />
-                <button className="playlist-create-btn" onClick={createPlaylist}>✓</button>
-              </div>
-            )}
-            <div
-              className={`playlist-item ${activePlaylist === null ? "active" : ""}`}
-              onClick={() => selectPlaylist(null)}
-            >
-              <span>📚 All Tracks</span>
-              <span className="playlist-count">{tracks.length}</span>
-            </div>
-            {Object.entries(playlists).map(([name, plTracks]) => (
-              <div
-                key={name}
-                className={`playlist-item ${activePlaylist === name ? "active" : ""}`}
-                onClick={() => selectPlaylist(name)}
-              >
-                {editingPlaylist === name ? (
-                  <input
-                    className="playlist-name-input"
-                    value={editName}
-                    autoFocus
-                    onChange={(e) => setEditName(e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitRename(name);
-                      if (e.key === "Escape") {
-                        // Reset first so the blur that follows commits a no-op.
-                        setEditName(name);
-                        setEditingPlaylist(null);
-                      }
-                    }}
-                    onBlur={() => commitRename(name)}
-                  />
-                ) : (
-                  <>
-                    <span>♪ {name}</span>
-                    <span className="playlist-count">{plTracks.length}</span>
-                    <button
-                      className="playlist-edit-btn"
-                      onClick={(e) => { e.stopPropagation(); startRename(name); }}
-                      title="Rename playlist"
-                    >✎</button>
-                    <button
-                      className="playlist-delete-btn"
-                      onClick={(e) => { e.stopPropagation(); handleDeletePlaylist(name); }}
-                      title="Delete playlist"
-                    >×</button>
-                  </>
+            {!playlistsCollapsed && (
+              <>
+                {showPlaylistInput && (
+                  <div className="playlist-input-row">
+                    <input
+                      className="playlist-name-input"
+                      type="text"
+                      placeholder="Playlist name..."
+                      value={newPlaylistName}
+                      onChange={(e) => setNewPlaylistName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && createPlaylist()}
+                    />
+                    <button className="playlist-create-btn" onClick={createPlaylist}>✓</button>
+                  </div>
                 )}
-              </div>
-            ))}
+                <div className="playlist-list">
+                  <div
+                    className={`playlist-item ${activePlaylist === null ? "active" : ""}`}
+                    onClick={() => selectPlaylist(null)}
+                  >
+                    <span className="playlist-name">📚 All Tracks</span>
+                    <span className="playlist-count">{tracks.length}</span>
+                  </div>
+                  {Object.entries(playlists).map(([name, plTracks]) => (
+                    <div
+                      key={name}
+                      className={`playlist-item ${activePlaylist === name ? "active" : ""}`}
+                      onClick={() => selectPlaylist(name)}
+                    >
+                      {editingPlaylist === name ? (
+                        <input
+                          className="playlist-name-input"
+                          value={editName}
+                          autoFocus
+                          onChange={(e) => setEditName(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitRename(name);
+                            if (e.key === "Escape") {
+                              // Reset first so the blur that follows commits a no-op.
+                              setEditName(name);
+                              setEditingPlaylist(null);
+                            }
+                          }}
+                          onBlur={() => commitRename(name)}
+                        />
+                      ) : (
+                        <>
+                          <span className="playlist-name" title={name}>♪ {name}</span>
+                          <span className="playlist-count">{plTracks.length}</span>
+                          <button
+                            className="playlist-edit-btn"
+                            onClick={(e) => { e.stopPropagation(); startRename(name); }}
+                            title="Rename playlist"
+                          >✎</button>
+                          <button
+                            className="playlist-delete-btn"
+                            onClick={(e) => { e.stopPropagation(); handleDeletePlaylist(name); }}
+                            title="Delete playlist"
+                          >×</button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
 

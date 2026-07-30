@@ -233,6 +233,7 @@ body,
 .playlist-section {
   padding: 8px 16px;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .playlist-header {
@@ -240,13 +241,50 @@ body,
   align-items: center;
   justify-content: space-between;
   margin-bottom: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.playlist-section.collapsed .playlist-header {
+  margin-bottom: 0;
 }
 
 .playlist-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 9px;
   color: var(--text-muted);
   letter-spacing: 2px;
   text-transform: uppercase;
+}
+
+.playlist-header:hover .playlist-title {
+  color: var(--text-secondary);
+}
+
+.playlist-chevron {
+  font-size: 9px;
+  letter-spacing: 0;
+  color: var(--amber-dim);
+}
+
+.playlist-total {
+  font-size: 8px;
+  letter-spacing: 0;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border-radius: 8px;
+  padding: 1px 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scrollable list so many playlists don't push the track list off-screen. */
+.playlist-list {
+  max-height: 168px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-light) transparent;
 }
 
 .playlist-add-btn {
@@ -314,6 +352,14 @@ body,
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s;
+}
+
+.playlist-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .playlist-item:hover {
