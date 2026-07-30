@@ -12,16 +12,27 @@ RetroPlay is an offline desktop music player for local MP3s. It supports synced 
 - Offline lyrics cache
 - Download audio from YouTube with `yt-dlp`
 
+## Install
+
+Download the latest installer from the [Releases page](https://github.com/andarezabasni/retroplay/releases/latest):
+
+- Windows: `RetroPlay_x64-setup.exe` (recommended) or `RetroPlay_x64_en-US.msi`
+- Linux: `RetroPlay_amd64.AppImage` or `RetroPlay_amd64.deb`
+
+`yt-dlp` and `ffmpeg` are bundled with the installer, so there is nothing else to
+install.
+
 ## Requirements
+
+These are only needed to build from source, not to run the installed app.
+
 - Node.js 18+
 - Rust
 - Windows: Visual Studio C++ Build Tools
 
-`yt-dlp` and `ffmpeg` are **bundled** with the app (see below), so end users do
-not need to install them separately. YouTube cookie handling is automatic:
-RetroPlay tries downloading without cookies first, and only if YouTube demands a
-sign-in does it automatically try cookies from any installed browser (Firefox,
-Chrome, Edge, Brave, Chromium, Opera, Vivaldi).
+YouTube cookie handling is automatic: RetroPlay tries downloading without cookies
+first, and only if YouTube demands a sign-in does it try cookies from an installed
+browser (Firefox, Chrome, Edge, Brave, Chromium, Opera, Vivaldi).
 
 ### Linux
 Install the Tauri system dependencies for your distro.
