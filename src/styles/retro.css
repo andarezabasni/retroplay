@@ -1786,3 +1786,119 @@ html.overlay-mode #root::after {
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
 }
+
+/* ───────────────────────────────────────────────────────
+   Mobile / responsive layout
+   The 3-column grid collapses to a single panel controlled by a bottom
+   tab bar. The tab bar itself is hidden on wide (desktop) screens.
+─────────────────────────────────────────────────────── */
+.mobile-tabbar {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Single-column: one content panel on top, player bar, then tab bar. */
+  .app-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto auto;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /* Show only the panel matching the active tab. */
+  .library-panel,
+  .center-panel,
+  .lyrics-panel {
+    display: none;
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+  }
+  .mobile-tab-library .library-panel,
+  .mobile-tab-player .center-panel,
+  .mobile-tab-lyrics .lyrics-panel {
+    display: flex;
+  }
+
+  /* Player bar spans the single column and wraps its groups on small widths. */
+  .player-bar {
+    grid-column: 1;
+    grid-row: 2;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px 14px;
+    padding: 10px 14px;
+  }
+  .progress-section {
+    order: -1;
+    flex-basis: 100%;
+  }
+  .volume-section {
+    display: none; /* volume handled by device buttons on mobile */
+  }
+  .player-footer {
+    display: none;
+  }
+
+  /* Bottom navigation between the three panels. */
+  .mobile-tabbar {
+    display: flex;
+    grid-column: 1;
+    grid-row: 3;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+  }
+  .mobile-tabbar button {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 8px 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .mobile-tabbar button span {
+    font-family: var(--font-body);
+    font-size: 9px;
+    letter-spacing: 0.5px;
+  }
+  .mobile-tabbar button.active {
+    color: var(--amber);
+  }
+
+  /* Larger touch targets and roomier now-playing art. */
+  .center-panel {
+    padding: 24px 20px;
+  }
+  .now-playing-art {
+    width: min(70vw, 300px);
+    height: min(70vw, 300px);
+  }
+  .vinyl-disc {
+    width: 75%;
+    height: 75%;
+  }
+  .ctrl-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+  }
+  .ctrl-btn.play-btn {
+    width: 56px;
+    height: 56px;
+    font-size: 20px;
+  }
+  .track-item {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .lyrics-line {
+    font-size: 15px;
+  }
+}
+

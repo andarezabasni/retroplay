@@ -49,6 +49,8 @@ export default function App() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [miniMode, setMiniMode] = useState(false);
   const [lyricsView, setLyricsView] = useState<"panel" | "focus" | "overlay">("panel");
+  // On narrow (mobile) screens only one panel shows at a time via this tab.
+  const [mobileTab, setMobileTab] = useState<"library" | "player" | "lyrics">("library");
   const winSnapshot = useRef<WindowSnapshot | null>(null);
   const focusContainerRef = useRef<HTMLDivElement>(null);
 
@@ -631,7 +633,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout mobile-tab-${mobileTab}`}>
       {isMock && (
         <div className="mock-banner">
           🧪 BROWSER MOCK MODE — Run <code>npm run tauri dev</code> for full desktop app
@@ -1097,6 +1099,22 @@ export default function App() {
           </a>
         </div>
       </div>
+
+      {/* ── Mobile tab bar (only visible on narrow screens) ── */}
+      <nav className="mobile-tabbar">
+        <button
+          className={mobileTab === "library" ? "active" : ""}
+          onClick={() => setMobileTab("library")}
+        >☰<span>Library</span></button>
+        <button
+          className={mobileTab === "player" ? "active" : ""}
+          onClick={() => setMobileTab("player")}
+        >♪<span>Player</span></button>
+        <button
+          className={mobileTab === "lyrics" ? "active" : ""}
+          onClick={() => setMobileTab("lyrics")}
+        >⛶<span>Lyrics</span></button>
+      </nav>
 
       {/* ── Modals ── */}
       {showOnboarding && (
