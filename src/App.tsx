@@ -359,12 +359,18 @@ export default function App() {
     setLrcLines([]);
     setPlaybackError("");
 
-    const assetUrl = await getTrackAssetUrl(track.path);
-    if (assetUrl) {
-      player.play(assetUrl);
+    // Native (Android) plays the raw file path directly; webview needs the
+    // asset URL. Pass metadata so the media notification shows title/artist.
+    if (isAndroid) {
+      player.play(track.path, { title: track.title, artist: track.artist });
     } else {
-      // Browser mock — just simulate playback
-      console.log(`[mock] Playing: ${track.title} — ${track.artist}`);
+      const assetUrl = await getTrackAssetUrl(track.path);
+      if (assetUrl) {
+        player.play(assetUrl, { title: track.title, artist: track.artist });
+      } else {
+        // Browser mock — just simulate playback
+        console.log(`[mock] Playing: ${track.title} — ${track.artist}`);
+      }
     }
 
     // Fetch lyrics
@@ -1124,15 +1130,31 @@ export default function App() {
             onClick={player.toggleShuffle}
             title="Shuffle"
           >⇌</button>
-          <button className="ctrl-btn" onClick={handlePrev} title="Previous">⏮</button>
+          <button className="ctrl-btn" onClick={handlePrev} title="Previous">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+              <path d="M7 6h2v12H7zM20 6L10 12l10 6z" />
+            </svg>
+          </button>
           <button
             className="ctrl-btn play-btn"
             onClick={currentTrack ? player.togglePlay : undefined}
             title={player.isPlaying ? "Pause" : "Play"}
           >
-            {player.isPlaying ? "⏸" : "▶"}
+            {player.isPlaying ? (
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+                <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            )}
           </button>
-          <button className="ctrl-btn" onClick={handleNext} title="Next">⏭</button>
+          <button className="ctrl-btn" onClick={handleNext} title="Next">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+              <path d="M15 6h2v12h-2zM4 6l10 6L4 18z" />
+            </svg>
+          </button>
           <button
             className={`ctrl-btn ${player.repeat !== "off" ? "active" : ""}`}
             onClick={player.cycleRepeat}

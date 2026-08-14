@@ -133,6 +133,83 @@ export async function defaultMusicFolder(): Promise<string | null> {
   return null;
 }
 
+// ── Native player (Android): background playback via Media3/ExoPlayer ──
+// On desktop these are unused (the webview <audio> element plays instead).
+
+export interface PlayerState {
+  isPlaying: boolean;
+  position: number;
+  duration: number;
+}
+
+export const nativePlayer = {
+  async play(path: string, title: string, artist: string): Promise<void> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke("player_play", { path, title, artist });
+  },
+  async pause(): Promise<void> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke("player_pause");
+  },
+  async resume(): Promise<void> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke("player_resume");
+  },
+  async seek(position: number): Promise<void> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke("player_seek", { position });
+  },
+  async setVolume(volume: number): Promise<void> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke("player_set_volume", { volume });
+  },
+  /** Poll current state — keeps UI in sync incl. changes from the media notification. */
+  async getState(): Promise<PlayerState | null> {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke("player_get_state");
+  },
+};
+
+/** Subscribe to native player events (Android). Returns an unlisten function. */
+export async function onPlayerEvents(handlers: {
+  onState?: (s: PlayerState) => void;
+  onEnded?: () => void;
+  onError?: (msg: string) => void;
+}): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const unlisteners: Array<() => void> = [];
+  try {
+    const { addPluginListener } = await import("@tauri-apps/api/core");
+    if (handlers.onState) {
+      const h = await addPluginListener<PlayerState>(
+        "player",
+        "player-state",
+        (p) => handlers.onState!(p),
+      );
+      unlisteners.push(() => h.unregister());
+    }
+    if (handlers.onEnded) {
+      const h = await addPluginListener<Record<string, never>>(
+        "player",
+        "player-ended",
+        () => handlers.onEnded!(),
+      );
+      unlisteners.push(() => h.unregister());
+    }
+    if (handlers.onError) {
+      const h = await addPluginListener<{ message: string }>(
+        "player",
+        "player-error",
+        (p) => handlers.onError!(p.message),
+      );
+      unlisteners.push(() => h.unregister());
+    }
+  } catch {
+    // Not Android — no native player events.
+  }
+  return () => unlisteners.forEach((u) => u());
+}
+
 export async function scanMusicFolder(folder: string): Promise<Track[]> {
   if (isTauri()) {
     const { invoke } = await import("@tauri-apps/api/core");
@@ -205,16 +282,34 @@ export interface DownloadProgress {
   stage: string;
 }
 
-/** Subscribe to download progress events. Returns an unlisten function. */
+/** Subscribe to download progress events. Returns an unlisten function.
+ *  Desktop emits a global `download-progress` event; the Android plugin emits
+ *  it as a plugin event, so we subscribe to both. */
 export async function onDownloadProgress(
   cb: (p: DownloadProgress) => void,
 ): Promise<() => void> {
   if (!isTauri()) return () => {};
+  const unlisteners: Array<() => void> = [];
+
   const { listen } = await import("@tauri-apps/api/event");
-  const unlisten = await listen<DownloadProgress>("download-progress", (e) =>
-    cb(e.payload),
+  unlisteners.push(
+    await listen<DownloadProgress>("download-progress", (e) => cb(e.payload)),
   );
-  return unlisten;
+
+  // Android: the Kotlin plugin triggers events on the "ytdlp" plugin channel.
+  try {
+    const { addPluginListener } = await import("@tauri-apps/api/core");
+    const handle = await addPluginListener<DownloadProgress>(
+      "ytdlp",
+      "download-progress",
+      (p) => cb(p),
+    );
+    unlisteners.push(() => handle.unregister());
+  } catch {
+    // Not on Android / plugin not present — global listener is enough.
+  }
+
+  return () => unlisteners.forEach((u) => u());
 }
 
 export async function loadPlaylists(folder: string): Promise<Record<string, Track[]>> {

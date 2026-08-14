@@ -1,6 +1,8 @@
 package com.retroplay.app
 
 import android.app.Activity
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
@@ -31,6 +33,7 @@ class DownloadArgs {
 @TauriPlugin
 class YtdlpPlugin(private val activity: Activity) : Plugin(activity) {
     private val scope = CoroutineScope(Dispatchers.IO)
+    private val main = Handler(Looper.getMainLooper())
     @Volatile private var initialized = false
 
     companion object {
@@ -114,10 +117,14 @@ class YtdlpPlugin(private val activity: Activity) : Plugin(activity) {
                 }
 
                 val progress: (Float, Long, String) -> Unit = { p, _, line ->
-                    val payload = JSObject()
-                    payload.put("percent", if (p < 0) -1.0 else p.toDouble())
-                    payload.put("stage", if (p < 0) "converting" else "downloading")
-                    trigger("download-progress", payload)
+                    // trigger() must run on the main thread or the webview
+                    // never receives the event (silent failure).
+                    main.post {
+                        val payload = JSObject()
+                        payload.put("percent", if (p < 0) -1.0 else p.toDouble())
+                        payload.put("stage", if (p < 0) "converting" else "downloading")
+                        trigger("download-progress", payload)
+                    }
                     Log.d(TAG, line)
                 }
 
@@ -128,10 +135,12 @@ class YtdlpPlugin(private val activity: Activity) : Plugin(activity) {
                     // (HTTP 403). Update to nightly once, then retry — same recovery
                     // as the desktop path.
                     if (looksStale(e.message)) {
-                        val payload = JSObject()
-                        payload.put("percent", -1.0)
-                        payload.put("stage", "updating")
-                        trigger("download-progress", payload)
+                        main.post {
+                            val payload = JSObject()
+                            payload.put("percent", -1.0)
+                            payload.put("stage", "updating")
+                            trigger("download-progress", payload)
+                        }
                         try {
                             YoutubeDL.getInstance().updateYoutubeDL(
                                 activity.application,

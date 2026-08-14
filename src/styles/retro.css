@@ -42,6 +42,15 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  /* Kill the blue tap flash / default control tint on Android WebView. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  /* WebView tints native buttons blue otherwise. */
+  -webkit-appearance: none;
+  appearance: none;
+  accent-color: var(--amber);
 }
 
 html,
@@ -934,6 +943,9 @@ body,
   color: var(--teal-text);
   font-size: 18px;
   box-shadow: 0 2px 8px rgba(214, 152, 44, 0.4);
+  /* Render the play/pause glyphs in text style (not the OS emoji), so the
+     play triangle isn't a blue emoji on Android. */
+  font-family: var(--font-body);
 }
 
 .ctrl-btn.play-btn:hover {

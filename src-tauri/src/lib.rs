@@ -805,6 +805,140 @@ fn init_ytdlp_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
         .build()
 }
 
+/// Handle to the Android PlayerPlugin (native Media3 playback).
+#[cfg(target_os = "android")]
+struct PlayerHandle(tauri::plugin::PluginHandle<tauri::Wry>);
+
+#[cfg(target_os = "android")]
+fn init_player_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    tauri::plugin::Builder::new("player")
+        .setup(|app, api| {
+            let handle = api.register_android_plugin("com.retroplay.app", "PlayerPlugin")?;
+            use tauri::Manager;
+            app.manage(PlayerHandle(handle));
+            Ok(())
+        })
+        .build()
+}
+
+/// Native-playback commands (Android only). On desktop the webview <audio>
+/// element handles playback, so these are no-ops there.
+#[tauri::command]
+async fn player_play(
+    _app: tauri::AppHandle,
+    _path: String,
+    _title: String,
+    _artist: String,
+) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let h = _app.state::<PlayerHandle>();
+        h.0
+            .run_mobile_plugin_async::<serde_json::Value>(
+                "play",
+                serde_json::json!({ "path": _path, "title": _title, "artist": _artist }),
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn player_pause(_app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let h = _app.state::<PlayerHandle>();
+        h.0
+            .run_mobile_plugin_async::<serde_json::Value>("pause", serde_json::json!({}))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn player_resume(_app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let h = _app.state::<PlayerHandle>();
+        h.0
+            .run_mobile_plugin_async::<serde_json::Value>("resume", serde_json::json!({}))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn player_seek(_app: tauri::AppHandle, _position: f64) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let h = _app.state::<PlayerHandle>();
+        h.0
+            .run_mobile_plugin_async::<serde_json::Value>(
+                "seek",
+                serde_json::json!({ "position": _position }),
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn player_set_volume(_app: tauri::AppHandle, _volume: f64) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let h = _app.state::<PlayerHandle>();
+        h.0
+            .run_mobile_plugin_async::<serde_json::Value>(
+                "setVolume",
+                serde_json::json!({ "volume": _volume }),
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Current native playback state, polled by the UI so the seek bar, lyrics and
+/// play/pause button stay in sync (including changes made from the media
+/// notification). Off Android this returns nulls and the webview <audio> drives
+/// the UI instead.
+#[cfg(target_os = "android")]
+#[derive(serde::Serialize, serde::Deserialize)]
+struct NativePlayerState {
+    #[serde(rename = "isPlaying")]
+    is_playing: bool,
+    position: f64,
+    duration: f64,
+}
+
+#[tauri::command]
+async fn player_get_state(_app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let h = _app.state::<PlayerHandle>();
+        let state: NativePlayerState = h
+            .0
+            .run_mobile_plugin_async("getState", serde_json::json!({}))
+            .await
+            .map_err(|e| e.to_string())?;
+        return serde_json::to_value(state).map_err(|e| e.to_string());
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        Ok(serde_json::Value::Null)
+    }
+}
+
 /// Download audio from a URL (e.g. YouTube) as MP3 into `folder`. Uses the
 /// bundled yt-dlp + ffmpeg sidecars (falling back to system installs), and
 /// automatically detects which browser's cookies work when YouTube demands a
@@ -996,6 +1130,7 @@ pub fn run() {
             #[cfg(target_os = "android")]
             {
                 _app.handle().plugin(init_ytdlp_plugin())?;
+                _app.handle().plugin(init_player_plugin())?;
             }
             Ok(())
         })
@@ -1010,7 +1145,13 @@ pub fn run() {
             delete_playlist,
             fetch_lyrics,
             download_audio,
-            update_ytdlp
+            update_ytdlp,
+            player_play,
+            player_pause,
+            player_resume,
+            player_seek,
+            player_set_volume,
+            player_get_state
         ])
         .run(tauri::generate_context!())
         .expect("error while running RetroPlay");
