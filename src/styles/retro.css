@@ -1805,6 +1805,13 @@ html.overlay-mode #root::after {
     height: 100dvh;
   }
 
+  /* Keep content clear of the Android status bar / notch. */
+  .library-header,
+  .lyrics-header,
+  .center-panel {
+    padding-top: calc(16px + env(safe-area-inset-top));
+  }
+
   /* Show only the panel matching the active tab. */
   .library-panel,
   .center-panel,
@@ -1847,6 +1854,7 @@ html.overlay-mode #root::after {
     grid-row: 3;
     background: var(--bg-surface);
     border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
   }
   .mobile-tabbar button {
     flex: 1;
