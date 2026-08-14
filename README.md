@@ -1,40 +1,76 @@
 # RetroPlay
 
-RetroPlay is an offline desktop music player for local MP3s. It supports synced lyrics, playlists, a floating mini player, and optional YouTube downloads.
+RetroPlay is an offline music player for local MP3s, available on desktop and
+Android. It supports synced lyrics, playlists, YouTube downloads, and background
+playback with media notification controls on Android.
 
 ## Features
 - Scan a local music folder and play MP3 files
 - Shuffle, repeat, seek, and volume controls
-- Lyrics from LRCLIB
-- Three lyrics modes: side panel, focus view, and floating overlay
-- Mini player that stays on top
+- Synced lyrics from LRCLIB, with an offline cache
+- Three lyrics modes on desktop: side panel, focus view, and floating overlay
+- Mini player that stays on top (desktop)
 - Playlists: create, rename, delete, add/remove tracks
-- Offline lyrics cache
-- Download audio from YouTube with `yt-dlp`
+- Download audio from a YouTube link with `yt-dlp`, with a live progress bar
+- Android: background playback with a system media notification, and audio that
+  continues when the app is in the background or the screen is off
 
 ## Install
 
-Download the latest installer from the [Releases page](https://github.com/andarezabasni/retroplay/releases/latest):
+Download the latest release from the [Releases page](https://github.com/andarezabasni/retroplay/releases/latest):
 
-- Windows: `RetroPlay_x64-setup.exe` (recommended) or `RetroPlay_x64_en-US.msi`
+- Windows: `RetroPlay_3.1.0_x64-setup.exe` (recommended) or `RetroPlay_3.1.0_x64_en-US.msi`
 - Linux: `RetroPlay_amd64.AppImage` or `RetroPlay_amd64.deb`
+- Android: `RetroPlay_3.1.0_android.apk`
 
-`yt-dlp` and `ffmpeg` are bundled with the installer, so there is nothing else to
-install.
+On desktop, `yt-dlp` and `ffmpeg` are bundled with the installer. On Android they
+are bundled inside the APK. There is nothing else to install.
 
-## Requirements
+### Windows install note
+The installer is not signed with a paid certificate, so Windows SmartScreen may
+show a warning. Choose "More info" then "Run anyway".
+
+### Android install note
+The APK is signed with a self-managed key, so enable "Install from unknown
+sources" for your file manager or browser when prompted. Downloads are saved to
+the app's own music folder and appear in the library automatically.
+
+## YouTube downloads
+Paste a YouTube link and RetroPlay downloads the audio as MP3. If YouTube changes
+break the bundled `yt-dlp`, RetroPlay updates it to the latest nightly and retries
+automatically. On desktop you can also update it manually from the About dialog.
+
+Cookie handling on desktop is automatic: RetroPlay tries downloading without
+cookies first, and only if YouTube demands a sign-in does it try cookies from an
+installed browser (Firefox, Chrome, Edge, Brave, Chromium, Opera, Vivaldi).
+
+## Build from source
 
 These are only needed to build from source, not to run the installed app.
 
 - Node.js 18+
 - Rust
-- Windows: Visual Studio C++ Build Tools
+- Windows desktop: Visual Studio C++ Build Tools
+- Android: Android SDK + NDK, and a JDK 17 or newer
 
-YouTube cookie handling is automatic: RetroPlay tries downloading without cookies
-first, and only if YouTube demands a sign-in does it try cookies from an installed
-browser (Firefox, Chrome, Edge, Brave, Chromium, Opera, Vivaldi).
+### Desktop
 
-### Linux
+Fetch the bundled `yt-dlp` and `ffmpeg` binaries once:
+```powershell
+cd src-tauri/binaries
+./download.ps1
+```
+Then run or build:
+```bash
+npm install
+npm run tauri dev      # run locally
+npm run tauri build    # produce installers
+```
+For browser-only UI testing, use `npm run dev`.
+
+See [src-tauri/binaries/README.md](src-tauri/binaries/README.md) for details.
+
+### Linux dependencies
 Install the Tauri system dependencies for your distro.
 
 Example for Debian/Ubuntu:
@@ -43,38 +79,27 @@ sudo apt update
 sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
 ```
 
-## Run
+### Android
 ```bash
-npm install
-npm run tauri dev
+npm run tauri android init     # once, generates the Android project
+npm run tauri android dev      # run on a device/emulator
+npm run tauri android build --apk
 ```
-
-For browser-only UI testing, use:
-```bash
-npm run dev
-```
-
-## Build
-
-Before building, fetch the bundled `yt-dlp` and `ffmpeg` binaries once:
-```powershell
-cd src-tauri/binaries
-./download.ps1
-```
-Then build:
-```bash
-npm run tauri build
-```
-See [src-tauri/binaries/README.md](src-tauri/binaries/README.md) for details.
+Release signing reads `src-tauri/gen/android/keystore.properties`, which is kept
+out of version control.
 
 ## Project structure
 - `src/` — React frontend
 - `src-tauri/` — Rust backend
+- `src-tauri/gen/android/` — Android project (Kotlin plugins for downloads and
+  playback)
 
 ## Notes
 - First launch shows an onboarding modal.
 - Lyrics and playlists are stored next to the selected music folder.
-- Floating windows work only in the Tauri desktop app.
+- Floating windows and the mini player are desktop-only.
+- On Android, playback uses a native Media3 service; on desktop it uses the
+  built-in audio element.
 - MP3 metadata is read from tags first, then falls back to the filename.
 
 ## Credits

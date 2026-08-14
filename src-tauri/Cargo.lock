@@ -2654,7 +2654,7 @@ dependencies = [
 
 [[package]]
 name = "retroplay"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "id3",
  "mp3-duration",

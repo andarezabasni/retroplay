@@ -19,3 +19,16 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# ── RetroPlay ──
+# Tauri invokes our plugins by reflection; keep them and their @Command methods.
+-keep class com.retroplay.app.** { *; }
+-keep class app.tauri.** { *; }
+
+# youtubedl-android talks to bundled python via reflection/JNI.
+-keep class com.yausername.** { *; }
+-dontwarn com.yausername.**
+
+# Media3 / ExoPlayer.
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**
