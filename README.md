@@ -20,7 +20,6 @@ playback with media notification controls on Android.
 Download the latest release from the [Releases page](https://github.com/andarezabasni/retroplay/releases/latest):
 
 - Windows: `RetroPlay_3.1.0_x64-setup.exe` (recommended) or `RetroPlay_3.1.0_x64_en-US.msi`
-- Linux: `RetroPlay_amd64.AppImage` or `RetroPlay_amd64.deb`
 - Android: `RetroPlay_3.1.0_android.apk`
 
 On desktop, `yt-dlp` and `ffmpeg` are bundled with the installer. On Android they
@@ -52,7 +51,6 @@ These are only needed to build from source, not to run the installed app.
 - Rust
 - Windows desktop: Visual Studio C++ Build Tools
 - Android: Android SDK + NDK, and a JDK 17 or newer
-
 ### Desktop
 
 Fetch the bundled `yt-dlp` and `ffmpeg` binaries once:
