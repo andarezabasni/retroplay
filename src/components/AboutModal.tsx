@@ -1,8 +1,28 @@
+import { useState } from "react";
+import { updateYtdlp, isTauri } from "../utils/tauriBridge";
+
 interface AboutModalProps {
   onClose: () => void;
 }
 
 export function AboutModal({ onClose }: AboutModalProps) {
+  const [updating, setUpdating] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState("");
+
+  async function handleUpdateYtdlp() {
+    if (updating) return;
+    setUpdating(true);
+    setUpdateMsg("Updating downloader…");
+    try {
+      const msg = await updateYtdlp();
+      setUpdateMsg(`✓ ${msg}`);
+    } catch (err) {
+      setUpdateMsg(`✕ ${err}`);
+    } finally {
+      setUpdating(false);
+    }
+  }
+
   return (
     <div
       className="about-backdrop"
@@ -61,6 +81,28 @@ export function AboutModal({ onClose }: AboutModalProps) {
               <li>YouTube downloads</li>
             </ul>
           </div>
+
+          {isTauri() && (
+            <div className="about-section">
+              <h3>Downloader</h3>
+              <p className="about-description">
+                If YouTube downloads fail (e.g. HTTP 403), update the
+                downloader to the latest version.
+              </p>
+              <button
+                className="about-btn"
+                onClick={handleUpdateYtdlp}
+                disabled={updating}
+              >
+                {updating ? "Updating…" : "Update yt-dlp"}
+              </button>
+              {updateMsg && (
+                <p className="about-description" style={{ marginTop: 8 }}>
+                  {updateMsg}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="about-footer">
