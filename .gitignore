@@ -4,6 +4,10 @@ src-tauri/target/
 src-tauri/gen/schemas/
 .vite/
 
+# Built APKs / app bundles — large binaries, produced by the build
+*.apk
+*.aab
+
 # Bundled sidecar binaries — large, fetched via src-tauri/binaries/download.ps1
 src-tauri/binaries/*
 !src-tauri/binaries/README.md
