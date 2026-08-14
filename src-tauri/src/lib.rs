@@ -109,6 +109,23 @@ fn get_track_meta(path: String) -> Option<TrackMeta> {
     read_track_meta(&PathBuf::from(path))
 }
 
+/// Which platform the app is running on. The frontend uses this to switch
+/// between the desktop folder-picker flow and the Android media flow.
+#[tauri::command]
+fn get_platform() -> String {
+    if cfg!(target_os = "android") {
+        "android".to_string()
+    } else if cfg!(target_os = "ios") {
+        "ios".to_string()
+    } else if cfg!(target_os = "windows") {
+        "windows".to_string()
+    } else if cfg!(target_os = "macos") {
+        "macos".to_string()
+    } else {
+        "linux".to_string()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlaylistMeta {
     pub name: String,
@@ -722,6 +739,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             scan_music_folder,
             get_track_meta,
+            get_platform,
             load_playlists,
             save_playlist,
             rename_playlist,

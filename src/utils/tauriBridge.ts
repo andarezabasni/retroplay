@@ -115,6 +115,15 @@ async function fetchLyricsBrowser(
 
 // ── Public API ──
 
+/** Which OS the app runs on: android | ios | windows | macos | linux | browser. */
+export async function getPlatform(): Promise<string> {
+  if (isTauri()) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke("get_platform");
+  }
+  return "browser";
+}
+
 export async function scanMusicFolder(folder: string): Promise<Track[]> {
   if (isTauri()) {
     const { invoke } = await import("@tauri-apps/api/core");
