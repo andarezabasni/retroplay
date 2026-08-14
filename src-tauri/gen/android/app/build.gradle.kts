@@ -51,6 +51,14 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    // youtubedl-android reads its bundled python/ffmpeg .so files from disk, so
+    // they must be extracted at install time rather than kept compressed in
+    // the APK. Without this, YoutubeDL.init fails ("failed to initialize").
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 rust {

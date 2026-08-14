@@ -153,7 +153,9 @@ export default function App() {
       const p = await getPlatform();
       if (cancelled) return;
       setPlatform(p);
-      if (p === "android" && !musicFolder) {
+      if (p === "android") {
+        // Always use the app's writable music dir on Android (ignore any stale
+        // saved path like /storage/emulated/0/Music which isn't writable).
         const folder = await defaultMusicFolder();
         if (!cancelled && folder) {
           setMusicFolder(folder);

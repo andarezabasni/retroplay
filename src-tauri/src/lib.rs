@@ -108,30 +108,30 @@ fn get_track_meta(path: String) -> Option<TrackMeta> {
     read_track_meta(&PathBuf::from(path))
 }
 
-/// Default music folder to scan on Android. Android apps can read shared media
-/// (with READ_MEDIA_AUDIO) from the public Music/ and Download/ directories;
-/// downloads also land there. The frontend uses this instead of a folder
-/// picker on Android. Returns the first existing candidate, else Music/.
+/// Default music folder to scan on Android. On modern Android the shared
+/// Music/ dir isn't writable without special access, so we use the app's own
+/// external files dir (always writable, no permission needed). Resolved by the
+/// Kotlin plugin. Returns None off Android.
 #[tauri::command]
-fn default_music_folder() -> Option<String> {
-    if !cfg!(target_os = "android") {
-        return None;
-    }
-    // Shared external storage is mounted here on effectively all Android devices.
-    let candidates = [
-        "/storage/emulated/0/Music",
-        "/storage/emulated/0/Download",
-        "/sdcard/Music",
-        "/sdcard/Download",
-    ];
-    for c in candidates {
-        if PathBuf::from(c).is_dir() {
-            return Some(c.to_string());
+async fn default_music_folder(_app: tauri::AppHandle) -> Option<String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        #[derive(serde::Deserialize)]
+        struct MusicDir {
+            path: String,
         }
+        let handle = _app.state::<YtdlpHandle>();
+        let res: Result<MusicDir, _> = handle
+            .0
+            .run_mobile_plugin_async("musicDir", serde_json::json!({}))
+            .await;
+        return res.ok().map(|m| m.path);
     }
-    // Fall back to Music even if it doesn't exist yet — it's the conventional
-    // target and will appear once the user adds/downloads a track.
-    Some("/storage/emulated/0/Music".to_string())
+    #[cfg(not(target_os = "android"))]
+    {
+        None
+    }
 }
 
 /// Which platform the app is running on. The frontend uses this to switch

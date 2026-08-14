@@ -59,6 +59,17 @@ class YtdlpPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
+    /** App-owned, always-writable music folder (survives without storage perms). */
+    @Command
+    fun musicDir(invoke: Invoke) {
+        val dir = activity.getExternalFilesDir("Music")
+            ?: File(activity.filesDir, "Music")
+        if (!dir.exists()) dir.mkdirs()
+        val res = JSObject()
+        res.put("path", dir.absolutePath)
+        invoke.resolve(res)
+    }
+
     /** Update the bundled yt-dlp to the latest release (fixes 403/extraction). */
     @Command
     fun updateYtdlp(invoke: Invoke) {
@@ -89,22 +100,49 @@ class YtdlpPlugin(private val activity: Activity) : Plugin(activity) {
                 val outDir = File(args.folder)
                 if (!outDir.exists()) outDir.mkdirs()
 
-                val request = YoutubeDLRequest(args.url)
-                request.addOption("-x")
-                request.addOption("--audio-format", "mp3")
-                request.addOption("--audio-quality", "0")
-                request.addOption("--embed-metadata")
-                request.addOption("--no-playlist")
-                request.addOption("--no-mtime")
-                request.addOption("-o", "${outDir.absolutePath}/%(artist,uploader)s - %(track,title)s.%(ext)s")
+                fun buildRequest(): YoutubeDLRequest {
+                    val request = YoutubeDLRequest(args.url)
+                    request.addOption("-x")
+                    request.addOption("--audio-format", "mp3")
+                    request.addOption("--audio-quality", "0")
+                    request.addOption("--embed-metadata")
+                    request.addOption("--no-playlist")
+                    request.addOption("--no-mtime")
+                    request.addOption("--no-update")
+                    request.addOption("-o", "${outDir.absolutePath}/%(artist,uploader)s - %(track,title)s.%(ext)s")
+                    return request
+                }
 
-                val response = YoutubeDL.getInstance().execute(request, PROCESS_ID) { progress, _, line ->
-                    // Forward progress to the webview using the desktop event name.
+                val progress: (Float, Long, String) -> Unit = { p, _, line ->
                     val payload = JSObject()
-                    payload.put("percent", if (progress < 0) -1.0 else progress.toDouble())
-                    payload.put("stage", if (progress < 0) "converting" else "downloading")
+                    payload.put("percent", if (p < 0) -1.0 else p.toDouble())
+                    payload.put("stage", if (p < 0) "converting" else "downloading")
                     trigger("download-progress", payload)
                     Log.d(TAG, line)
+                }
+
+                val response = try {
+                    YoutubeDL.getInstance().execute(buildRequest(), PROCESS_ID, callback = progress)
+                } catch (e: Exception) {
+                    // Stale bundled yt-dlp breaks on YouTube's signature/n challenge
+                    // (HTTP 403). Update to nightly once, then retry — same recovery
+                    // as the desktop path.
+                    if (looksStale(e.message)) {
+                        val payload = JSObject()
+                        payload.put("percent", -1.0)
+                        payload.put("stage", "updating")
+                        trigger("download-progress", payload)
+                        try {
+                            YoutubeDL.getInstance().updateYoutubeDL(
+                                activity.application,
+                                YoutubeDL.UpdateChannel._NIGHTLY,
+                            )
+                        } catch (_: Exception) {
+                        }
+                        YoutubeDL.getInstance().execute(buildRequest(), PROCESS_ID, callback = progress)
+                    } else {
+                        throw e
+                    }
                 }
 
                 // Best-effort: pull the destination filename from yt-dlp output.
@@ -122,6 +160,18 @@ class YtdlpPlugin(private val activity: Activity) : Plugin(activity) {
                 invoke.reject(e.message ?: "Download failed")
             }
         }
+    }
+
+    /** True when a yt-dlp error looks like a stale-binary failure. */
+    private fun looksStale(msg: String?): Boolean {
+        val e = (msg ?: "").lowercase()
+        return e.contains("403") ||
+            e.contains("unable to download video data") ||
+            e.contains("challenge") ||
+            e.contains("signature solving failed") ||
+            e.contains("nsig") ||
+            e.contains("older than") ||
+            e.contains("unable to extract")
     }
 
     /** Cancel an in-flight download, if any. */
