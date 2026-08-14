@@ -570,6 +570,7 @@ async fn fetch_lyrics(
 
 /// Path to the bundled ffmpeg sidecar, if present. Tauri copies sidecars next
 /// to the main executable with the target-triple suffix stripped at runtime.
+#[cfg(not(target_os = "android"))]
 fn bundled_ffmpeg_path() -> Option<PathBuf> {
     let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
     let name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
@@ -583,6 +584,7 @@ fn bundled_ffmpeg_path() -> Option<PathBuf> {
 
 /// Run yt-dlp with `args`: prefer the bundled sidecar, fall back to a system
 /// `yt-dlp` on PATH (for users who already have it installed).
+#[cfg(not(target_os = "android"))]
 async fn run_ytdlp(
     app: &tauri::AppHandle,
     args: Vec<String>,
@@ -608,6 +610,7 @@ async fn run_ytdlp(
 }
 
 /// Progress payload streamed to the frontend during a download.
+#[cfg(not(target_os = "android"))]
 #[derive(Clone, Serialize)]
 struct DownloadProgress {
     /// 0.0-100.0, or -1.0 while post-processing (converting to mp3).
@@ -617,6 +620,7 @@ struct DownloadProgress {
 }
 
 /// Parse yt-dlp's `[download]  12.3% of ...` progress lines into a percentage.
+#[cfg(not(target_os = "android"))]
 fn parse_ytdlp_percent(line: &str) -> Option<f64> {
     let l = line.trim();
     if !l.starts_with("[download]") {
@@ -638,6 +642,7 @@ fn parse_ytdlp_percent(line: &str) -> Option<f64> {
 
 /// Run yt-dlp streaming its output, emitting `download-progress` events as it
 /// goes. Returns collected (success, stdout, stderr) like `output()` would.
+#[cfg(not(target_os = "android"))]
 async fn run_ytdlp_streaming(
     app: &tauri::AppHandle,
     args: Vec<String>,
@@ -721,33 +726,50 @@ async fn run_ytdlp_streaming(
 /// there fixes downloads without shipping a new app build.
 #[tauri::command]
 async fn update_ytdlp(app: tauri::AppHandle) -> Result<String, String> {
-    let out = run_ytdlp(
-        &app,
-        vec!["--update-to".to_string(), "nightly".to_string()],
-    )
-    .await?;
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    if out.status.success() {
-        // yt-dlp prints "Updated yt-dlp to ..." or "yt-dlp is up to date".
-        let msg = stdout
-            .lines()
-            .rev()
-            .find(|l| l.to_lowercase().contains("yt-dlp"))
-            .unwrap_or("yt-dlp updated.")
-            .trim()
-            .to_string();
-        Ok(msg)
-    } else {
-        Err(format!(
-            "Could not update yt-dlp.\n{}",
-            stderr.lines().rev().take(2).collect::<Vec<_>>().join("\n")
-        ))
+    // Android: delegate to the Kotlin plugin's updater.
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let handle = app.state::<YtdlpHandle>();
+        let res: AndroidDlResult = handle
+            .0
+            .run_mobile_plugin_async("updateYtdlp", serde_json::json!({}))
+            .await
+            .map_err(|e| format!("Could not update yt-dlp: {e}"))?;
+        return Ok(res.message);
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let out = run_ytdlp(
+            &app,
+            vec!["--update-to".to_string(), "nightly".to_string()],
+        )
+        .await?;
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        if out.status.success() {
+            // yt-dlp prints "Updated yt-dlp to ..." or "yt-dlp is up to date".
+            let msg = stdout
+                .lines()
+                .rev()
+                .find(|l| l.to_lowercase().contains("yt-dlp"))
+                .unwrap_or("yt-dlp updated.")
+                .trim()
+                .to_string();
+            Ok(msg)
+        } else {
+            Err(format!(
+                "Could not update yt-dlp.\n{}",
+                stderr.lines().rev().take(2).collect::<Vec<_>>().join("\n")
+            ))
+        }
     }
 }
 
 /// True when yt-dlp output looks like a stale-binary failure (YouTube changed
 /// something), which a self-update usually fixes.
+#[cfg(not(target_os = "android"))]
 fn looks_like_stale_ytdlp(stderr: &str) -> bool {
     let e = stderr.to_lowercase();
     e.contains("http error 403")
@@ -755,6 +777,32 @@ fn looks_like_stale_ytdlp(stderr: &str) -> bool {
         || e.contains("unable to extract")
         || e.contains("nsig extraction failed")
         || e.contains("failed to extract any player response")
+}
+
+/// On Android, delegate to the YtdlpPlugin (bundled yt-dlp + python + ffmpeg)
+/// instead of the desktop sidecar path, which can't run there.
+#[cfg(target_os = "android")]
+#[derive(serde::Deserialize)]
+struct AndroidDlResult {
+    message: String,
+}
+
+/// Handle to the Android YtdlpPlugin, stored in Tauri state on Android only.
+#[cfg(target_os = "android")]
+struct YtdlpHandle(tauri::plugin::PluginHandle<tauri::Wry>);
+
+/// Tauri plugin that registers the Android-side Kotlin YtdlpPlugin and stores
+/// its handle in app state for download_audio/update_ytdlp to use.
+#[cfg(target_os = "android")]
+fn init_ytdlp_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    tauri::plugin::Builder::new("ytdlp")
+        .setup(|app, api| {
+            let handle = api.register_android_plugin("com.retroplay.app", "YtdlpPlugin")?;
+            use tauri::Manager;
+            app.manage(YtdlpHandle(handle));
+            Ok(())
+        })
+        .build()
 }
 
 /// Download audio from a URL (e.g. YouTube) as MP3 into `folder`. Uses the
@@ -774,6 +822,25 @@ async fn download_audio(
     if folder.trim().is_empty() {
         return Err("Select music folder first.".into());
     }
+
+    // Android: hand off to the Kotlin plugin; there are no runnable sidecars.
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let handle = app.state::<YtdlpHandle>();
+        let res: AndroidDlResult = handle
+            .0
+            .run_mobile_plugin_async(
+                "download",
+                serde_json::json!({ "folder": folder, "url": url }),
+            )
+            .await
+            .map_err(|e| format!("Download failed: {e}"))?;
+        return Ok(res.message);
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
 
     let template = format!("{folder}/%(artist,uploader)s - %(track,title)s.%(ext)s");
     let ffmpeg = bundled_ffmpeg_path();
@@ -916,6 +983,7 @@ async fn download_audio(
         Some(n) => format!("Added: {n}"),
         None => "Song downloaded successfully".to_string(),
     })
+    } // end #[cfg(not(target_os = "android"))]
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -923,6 +991,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .setup(|_app| {
+            // On Android, register the Kotlin YtdlpPlugin so downloads work.
+            #[cfg(target_os = "android")]
+            {
+                _app.handle().plugin(init_ytdlp_plugin())?;
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             scan_music_folder,
             get_track_meta,
