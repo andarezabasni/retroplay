@@ -3,6 +3,8 @@ import { useAudioPlayer } from "./hooks/useAudioPlayer";
 import {
   scanMusicFolder,
   pickFolder,
+  getPlatform,
+  defaultMusicFolder,
   getTrackAssetUrl,
   fetchLyrics,
   downloadAudio,
@@ -32,6 +34,8 @@ export default function App() {
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [search, setSearch] = useState("");
   const [isMock, setIsMock] = useState(false);
+  const [platform, setPlatform] = useState<string>("");
+  const isAndroid = platform === "android";
   const [musicFolder, setMusicFolder] = useState<string>(() =>
     localStorage.getItem("retroplay_folder") || ""
   );
@@ -139,6 +143,29 @@ export default function App() {
       loadPlaylistsData(musicFolder);
     }
   }, [musicFolder]);
+
+  // Detect the platform once. On Android there is no folder picker — auto-use
+  // the shared Music/Download folder (which is also where downloads land).
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+    (async () => {
+      const p = await getPlatform();
+      if (cancelled) return;
+      setPlatform(p);
+      if (p === "android" && !musicFolder) {
+        const folder = await defaultMusicFolder();
+        if (!cancelled && folder) {
+          setMusicFolder(folder);
+          localStorage.setItem("retroplay_folder", folder);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function scanFolder(folder: string) {
     try {
@@ -745,11 +772,21 @@ export default function App() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <button className="folder-select-btn" onClick={handlePickFolder}>
-            {musicFolder
-              ? `♪ ${musicFolder.split("\\").pop() || musicFolder.split("/").pop()}`
-              : "Select Music Folder"}
-          </button>
+          {isAndroid ? (
+            <button
+              className="folder-select-btn"
+              onClick={() => musicFolder && scanFolder(musicFolder)}
+              title="Rescan your Music folder"
+            >
+              ↻ Rescan Music folder
+            </button>
+          ) : (
+            <button className="folder-select-btn" onClick={handlePickFolder}>
+              {musicFolder
+                ? `♪ ${musicFolder.split("\\").pop() || musicFolder.split("/").pop()}`
+                : "Select Music Folder"}
+            </button>
+          )}
 
           {musicFolder && (
             <>

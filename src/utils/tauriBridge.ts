@@ -124,6 +124,15 @@ export async function getPlatform(): Promise<string> {
   return "browser";
 }
 
+/** Android's default shared music folder to auto-scan (null off Android). */
+export async function defaultMusicFolder(): Promise<string | null> {
+  if (isTauri()) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke("default_music_folder");
+  }
+  return null;
+}
+
 export async function scanMusicFolder(folder: string): Promise<Track[]> {
   if (isTauri()) {
     const { invoke } = await import("@tauri-apps/api/core");

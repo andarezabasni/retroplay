@@ -108,6 +108,32 @@ fn get_track_meta(path: String) -> Option<TrackMeta> {
     read_track_meta(&PathBuf::from(path))
 }
 
+/// Default music folder to scan on Android. Android apps can read shared media
+/// (with READ_MEDIA_AUDIO) from the public Music/ and Download/ directories;
+/// downloads also land there. The frontend uses this instead of a folder
+/// picker on Android. Returns the first existing candidate, else Music/.
+#[tauri::command]
+fn default_music_folder() -> Option<String> {
+    if !cfg!(target_os = "android") {
+        return None;
+    }
+    // Shared external storage is mounted here on effectively all Android devices.
+    let candidates = [
+        "/storage/emulated/0/Music",
+        "/storage/emulated/0/Download",
+        "/sdcard/Music",
+        "/sdcard/Download",
+    ];
+    for c in candidates {
+        if PathBuf::from(c).is_dir() {
+            return Some(c.to_string());
+        }
+    }
+    // Fall back to Music even if it doesn't exist yet — it's the conventional
+    // target and will appear once the user adds/downloads a track.
+    Some("/storage/emulated/0/Music".to_string())
+}
+
 /// Which platform the app is running on. The frontend uses this to switch
 /// between the desktop folder-picker flow and the Android media flow.
 #[tauri::command]
@@ -119,8 +145,7 @@ fn get_platform() -> String {
     } else if cfg!(target_os = "windows") {
         "windows".to_string()
     } else if cfg!(target_os = "macos") {
-        "macos".to_string()
-    } else {
+        "macos".to_string()    } else {
         "linux".to_string()
     }
 }
@@ -902,6 +927,7 @@ pub fn run() {
             scan_music_folder,
             get_track_meta,
             get_platform,
+            default_music_folder,
             load_playlists,
             save_playlist,
             rename_playlist,
