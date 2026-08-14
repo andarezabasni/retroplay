@@ -33,14 +33,13 @@ $ytDest = Join-Path $here "yt-dlp-$triple.exe"
 $ffDest = Join-Path $here "ffmpeg-$triple.exe"
 
 # ── yt-dlp ──
-if (Test-Path $ytDest) {
-  Write-Host "yt-dlp already present, skipping." -ForegroundColor DarkGray
-} else {
-  Write-Host "Downloading yt-dlp..." -ForegroundColor Cyan
-  $ytUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
-  Invoke-WebRequest -Uri $ytUrl -OutFile $ytDest
-  Write-Host "  -> $ytDest" -ForegroundColor Green
-}
+# Always fetch the latest yt-dlp nightly: YouTube changes often break older
+# builds with HTTP 403 / extraction errors, and the nightly channel ships
+# fixes before stable, so a stable bundled binary rots faster.
+Write-Host "Downloading latest yt-dlp (nightly)..." -ForegroundColor Cyan
+$ytUrl = "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.exe"
+Invoke-WebRequest -Uri $ytUrl -OutFile $ytDest
+Write-Host "  -> $ytDest" -ForegroundColor Green
 
 # ── ffmpeg ──
 if (Test-Path $ffDest) {

@@ -171,6 +171,34 @@ export async function downloadAudio(folder: string, url: string): Promise<string
   return "Mock Song downloaded successfully";
 }
 
+/** Self-update the bundled/system yt-dlp. Fixes YouTube 403/extraction breakage. */
+export async function updateYtdlp(): Promise<string> {
+  if (isTauri()) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke("update_ytdlp");
+  }
+  await new Promise((r) => setTimeout(r, 800));
+  return "yt-dlp is up to date (mock)";
+}
+
+export interface DownloadProgress {
+  /** 0-100, or -1 while converting to mp3. */
+  percent: number;
+  stage: string;
+}
+
+/** Subscribe to download progress events. Returns an unlisten function. */
+export async function onDownloadProgress(
+  cb: (p: DownloadProgress) => void,
+): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const { listen } = await import("@tauri-apps/api/event");
+  const unlisten = await listen<DownloadProgress>("download-progress", (e) =>
+    cb(e.payload),
+  );
+  return unlisten;
+}
+
 export async function loadPlaylists(folder: string): Promise<Record<string, Track[]>> {
   if (isTauri()) {
     const { invoke } = await import("@tauri-apps/api/core");

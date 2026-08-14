@@ -6,6 +6,8 @@ import {
   getTrackAssetUrl,
   fetchLyrics,
   downloadAudio,
+  updateYtdlp,
+  onDownloadProgress,
   loadPlaylists,
   savePlaylist,
   renamePlaylist,
@@ -82,6 +84,7 @@ export default function App() {
   const [ytUrl, setYtUrl] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [downloadMsg, setDownloadMsg] = useState("");
+  const [downloadPct, setDownloadPct] = useState<number>(-1);
   const [playbackError, setPlaybackError] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
@@ -156,7 +159,13 @@ export default function App() {
     const url = ytUrl.trim();
     if (!url || !musicFolder || downloading) return;
     setDownloading(true);
-    setDownloadMsg("Downloading… (can take 1–2 minutes)");
+    setDownloadPct(0);
+    setDownloadMsg("Starting download…");
+    const unlisten = await onDownloadProgress((p) => {
+      setDownloadPct(p.percent);
+      if (p.percent < 0) setDownloadMsg("Converting to MP3…");
+      else setDownloadMsg(`Downloading… ${p.percent.toFixed(0)}%`);
+    });
     try {
       const result = await downloadAudio(musicFolder, url);
       setDownloadMsg(`✓ ${result}`);
@@ -165,7 +174,9 @@ export default function App() {
     } catch (err) {
       setDownloadMsg(`✕ ${err}`);
     } finally {
+      unlisten();
       setDownloading(false);
+      setDownloadPct(-1);
     }
   }
 
@@ -439,10 +450,40 @@ export default function App() {
     }
   }
 
-  function handleProgressClick(e: React.MouseEvent<HTMLDivElement>) {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = (e.clientX - rect.left) / rect.width;
-    player.seek(pct * player.duration);
+  // ── Draggable seek bar (native range input → smooth, proportional to duration) ──
+  const [seeking, setSeeking] = useState(false);
+  const [seekPreview, setSeekPreview] = useState(0);
+
+  // Duration can briefly be 0/NaN before metadata loads; guard against it.
+  const safeDuration =
+    player.duration && isFinite(player.duration) ? player.duration : 0;
+
+  // While interacting, show the previewed position; otherwise follow live time.
+  const displayTime = seeking ? seekPreview : player.currentTime;
+  const progressPct = safeDuration ? (displayTime / safeDuration) * 100 : 0;
+
+  // Freeze the bar the instant the handle is grabbed — otherwise the audio's
+  // timeupdate keeps resetting the value and the drag fights live playback.
+  function beginSeek() {
+    if (!safeDuration) return;
+    setSeekPreview(player.currentTime);
+    setSeeking(true);
+  }
+
+  // Update the preview as the user drags; don't commit the seek yet.
+  function handleSeekInput(e: React.ChangeEvent<HTMLInputElement>) {
+    setSeeking(true);
+    setSeekPreview(parseFloat(e.target.value));
+  }
+
+  // Commit the seek when the user releases the handle. Reads the value from the
+  // input element directly so it works for both change and pointer/key events.
+  function handleSeekCommit(
+    e: React.SyntheticEvent<HTMLInputElement>,
+  ) {
+    const val = parseFloat((e.currentTarget as HTMLInputElement).value);
+    if (!isNaN(val)) player.seek(val);
+    setSeeking(false);
   }
 
   // Active lyrics line
@@ -614,7 +655,14 @@ export default function App() {
             </button>
             <button className="mini-btn" onClick={handleNext} title="Next">⏭</button>
           </div>
-          <div className="mini-progress" onClick={handleProgressClick}>
+          <div
+            className="mini-progress"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const pct = (e.clientX - rect.left) / rect.width;
+              player.seek(pct * player.duration);
+            }}
+          >
             <div
               className="mini-progress-fill"
               style={{
@@ -722,6 +770,14 @@ export default function App() {
                   {downloading ? "…" : "↓"}
                 </button>
               </div>
+              {downloading && (
+                <div className="yt-progress">
+                  <div
+                    className={`yt-progress-fill ${downloadPct < 0 ? "indeterminate" : ""}`}
+                    style={downloadPct >= 0 ? { width: `${downloadPct}%` } : undefined}
+                  />
+                </div>
+              )}
               {downloadMsg && <div className="yt-status">{downloadMsg}</div>}
             </>
           )}
@@ -1046,22 +1102,33 @@ export default function App() {
         </div>
 
         <div className="progress-section">
-          <span className="time-display">{formatTime(player.currentTime)}</span>
-          <div className="progress-bar-container" onClick={handleProgressClick}>
-            <div
-              className="progress-bar-fill"
-              style={{
-                width: player.duration
-                  ? `${(player.currentTime / player.duration) * 100}%`
-                  : "0%",
-              }}
+          <span className="time-display">{formatTime(displayTime)}</span>
+          <div
+            className={`seek-bar ${seeking ? "seeking" : ""}`}
+            style={{ ["--seek-pct" as any]: `${progressPct}%` }}
+          >
+            <input
+              type="range"
+              className="seek-range"
+              min={0}
+              max={safeDuration || 100}
+              step={0.1}
+              value={Math.min(displayTime, safeDuration || 100)}
+              disabled={!safeDuration}
+              onPointerDown={beginSeek}
+              onChange={handleSeekInput}
+              onPointerUp={handleSeekCommit}
+              onKeyUp={handleSeekCommit}
+              aria-label="Seek"
             />
           </div>
           <span className="time-display">{formatTime(player.duration)}</span>
         </div>
 
         <div className="volume-section">
-          <span className="volume-label">VOL</span>
+          <span className="volume-icon" title="Volume">
+            {player.volume === 0 ? "🔇" : player.volume < 0.5 ? "🔉" : "🔊"}
+          </span>
           <input
             className="volume-slider"
             type="range"

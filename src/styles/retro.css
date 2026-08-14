@@ -229,6 +229,41 @@ body,
   word-break: break-word;
 }
 
+/* Download progress bar shown under the paste-link field. */
+.yt-progress {
+  margin-top: 8px;
+  height: 6px;
+  background: #e3d6b4;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.yt-progress-fill {
+  height: 100%;
+  background: var(--amber);
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+/* While converting (no known %), animate a sliding stripe. */
+.yt-progress-fill.indeterminate {
+  width: 40%;
+  background: linear-gradient(
+    90deg,
+    var(--amber-dim),
+    var(--orange),
+    var(--amber-dim)
+  );
+  animation: yt-indeterminate 1.1s ease-in-out infinite;
+}
+@keyframes yt-indeterminate {
+  0% {
+    margin-left: -40%;
+  }
+  100% {
+    margin-left: 100%;
+  }
+}
+
 /* ── Playlist Section ── */
 .playlist-section {
   padding: 8px 16px;
@@ -744,16 +779,17 @@ body,
 /* ── Player Controls (Bottom Bar) ── */
 .player-bar {
   grid-column: 1 / -1;
-  padding: 12px 24px;
+  padding: 12px 20px;
   border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   background: var(--bg-surface);
 }
 
 .progress-section {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -769,12 +805,13 @@ body,
 
 .progress-bar-container {
   flex: 1;
-  height: 5px;
+  height: 6px;
   background: #e3d6b4;
   cursor: pointer;
   position: relative;
   border: 1px solid var(--border);
   border-radius: 3px;
+  touch-action: none;
 }
 
 .progress-bar-fill {
@@ -789,10 +826,84 @@ body,
   background: var(--orange);
 }
 
+/* ── Native range seek bar (fills proportional to song duration) ── */
+.seek-bar {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.seek-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  outline: none;
+  cursor: pointer;
+  /* Filled portion (amber) up to the current position, track after it. */
+  background: linear-gradient(
+    to right,
+    var(--amber) 0%,
+    var(--amber) var(--seek-pct, 0%),
+    #e3d6b4 var(--seek-pct, 0%),
+    #e3d6b4 100%
+  );
+  touch-action: none;
+}
+
+.seek-bar.seeking .seek-range,
+.seek-range:hover {
+  background: linear-gradient(
+    to right,
+    var(--orange) 0%,
+    var(--orange) var(--seek-pct, 0%),
+    #e3d6b4 var(--seek-pct, 0%),
+    #e3d6b4 100%
+  );
+}
+
+.seek-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--amber);
+  border: 2px solid var(--bg-surface);
+  box-shadow: 0 1px 4px rgba(90, 70, 30, 0.4);
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+
+.seek-range::-webkit-slider-thumb:hover,
+.seek-bar.seeking .seek-range::-webkit-slider-thumb {
+  transform: scale(1.25);
+  background: var(--orange);
+}
+
+.seek-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--amber);
+  border: 2px solid var(--bg-surface);
+  box-shadow: 0 1px 4px rgba(90, 70, 30, 0.4);
+  cursor: pointer;
+}
+
+.seek-range:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .controls {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .ctrl-btn {
@@ -839,18 +950,47 @@ body,
 .volume-section {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Volume icon is always shown; the slider expands on hover/focus-within. */
+.volume-icon {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: color 0.15s, background 0.15s;
+}
+.volume-section:hover .volume-icon {
+  color: var(--amber);
 }
 
 .volume-slider {
   -webkit-appearance: none;
   appearance: none;
-  width: 80px;
+  width: 0;
+  opacity: 0;
   height: 5px;
   background: #e3d6b4;
   outline: none;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: 3px;
+  transition: width 0.2s ease, opacity 0.2s ease, border-color 0.2s ease;
+}
+/* Reveal the slider when hovering the section (or while focused/dragging). */
+.volume-section:hover .volume-slider,
+.volume-section:focus-within .volume-slider {
+  width: 80px;
+  opacity: 1;
+  border-color: var(--border);
 }
 
 .volume-slider::-webkit-slider-thumb {
@@ -865,20 +1005,31 @@ body,
 .volume-label {
   font-size: 9px;
   color: var(--text-muted);
-  min-width: 28px;
+  min-width: 26px;
+  overflow: hidden;
+  white-space: nowrap;
+  width: 0;
+  opacity: 0;
+  transition: width 0.2s ease, opacity 0.2s ease;
+}
+.volume-section:hover .volume-label,
+.volume-section:focus-within .volume-label {
+  width: 26px;
+  opacity: 1;
 }
 
 .mini-toggle,
 .about-toggle {
-  margin-left: 12px;
+  margin-left: 4px;
+  flex-shrink: 0;
 }
 
+/* Compact credit — sits at the far right without stealing seek-bar width. */
 .player-footer {
-  text-align: center;
-  padding-top: 8px;
-  border-top: 1px solid var(--border-light);
-  width: 100%;
-  margin-top: 4px;
+  flex-shrink: 1;
+  min-width: 0;
+  margin-left: 8px;
+  overflow: hidden;
 }
 
 .footer-credit {
@@ -887,6 +1038,10 @@ body,
   text-decoration: none;
   font-family: var(--font-body);
   transition: color 0.2s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 
 .footer-credit:hover {
