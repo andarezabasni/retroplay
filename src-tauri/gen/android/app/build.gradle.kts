@@ -51,6 +51,14 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    // youtubedl-android reads its bundled python/ffmpeg .so files from disk, so
+    // they must be extracted at install time rather than kept compressed in
+    // the APK. Without this, YoutubeDL.init fails ("failed to initialize").
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 rust {
@@ -63,6 +71,12 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-process:2.10.0")
+    // yt-dlp + python + ffmpeg bundled for on-device YouTube downloads.
+    implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
+    // Media3 (ExoPlayer + MediaSession) for background playback + media notification.
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-session:1.4.1")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.4")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")

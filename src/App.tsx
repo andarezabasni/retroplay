@@ -3,9 +3,13 @@ import { useAudioPlayer } from "./hooks/useAudioPlayer";
 import {
   scanMusicFolder,
   pickFolder,
+  getPlatform,
+  defaultMusicFolder,
   getTrackAssetUrl,
   fetchLyrics,
   downloadAudio,
+  updateYtdlp,
+  onDownloadProgress,
   loadPlaylists,
   savePlaylist,
   renamePlaylist,
@@ -30,6 +34,8 @@ export default function App() {
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
   const [search, setSearch] = useState("");
   const [isMock, setIsMock] = useState(false);
+  const [platform, setPlatform] = useState<string>("");
+  const isAndroid = platform === "android";
   const [musicFolder, setMusicFolder] = useState<string>(() =>
     localStorage.getItem("retroplay_folder") || ""
   );
@@ -49,6 +55,8 @@ export default function App() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [miniMode, setMiniMode] = useState(false);
   const [lyricsView, setLyricsView] = useState<"panel" | "focus" | "overlay">("panel");
+  // On narrow (mobile) screens only one panel shows at a time via this tab.
+  const [mobileTab, setMobileTab] = useState<"library" | "player" | "lyrics">("library");
   const winSnapshot = useRef<WindowSnapshot | null>(null);
   const focusContainerRef = useRef<HTMLDivElement>(null);
 
@@ -82,6 +90,7 @@ export default function App() {
   const [ytUrl, setYtUrl] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [downloadMsg, setDownloadMsg] = useState("");
+  const [downloadPct, setDownloadPct] = useState<number>(-1);
   const [playbackError, setPlaybackError] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
@@ -135,6 +144,31 @@ export default function App() {
     }
   }, [musicFolder]);
 
+  // Detect the platform once. On Android there is no folder picker — auto-use
+  // the shared Music/Download folder (which is also where downloads land).
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+    (async () => {
+      const p = await getPlatform();
+      if (cancelled) return;
+      setPlatform(p);
+      if (p === "android") {
+        // Always use the app's writable music dir on Android (ignore any stale
+        // saved path like /storage/emulated/0/Music which isn't writable).
+        const folder = await defaultMusicFolder();
+        if (!cancelled && folder) {
+          setMusicFolder(folder);
+          localStorage.setItem("retroplay_folder", folder);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function scanFolder(folder: string) {
     try {
       const result: Track[] = await scanMusicFolder(folder);
@@ -156,7 +190,13 @@ export default function App() {
     const url = ytUrl.trim();
     if (!url || !musicFolder || downloading) return;
     setDownloading(true);
-    setDownloadMsg("Downloading… (can take 1–2 minutes)");
+    setDownloadPct(0);
+    setDownloadMsg("Starting download…");
+    const unlisten = await onDownloadProgress((p) => {
+      setDownloadPct(p.percent);
+      if (p.percent < 0) setDownloadMsg("Converting to MP3…");
+      else setDownloadMsg(`Downloading… ${p.percent.toFixed(0)}%`);
+    });
     try {
       const result = await downloadAudio(musicFolder, url);
       setDownloadMsg(`✓ ${result}`);
@@ -165,7 +205,9 @@ export default function App() {
     } catch (err) {
       setDownloadMsg(`✕ ${err}`);
     } finally {
+      unlisten();
       setDownloading(false);
+      setDownloadPct(-1);
     }
   }
 
@@ -317,12 +359,18 @@ export default function App() {
     setLrcLines([]);
     setPlaybackError("");
 
-    const assetUrl = await getTrackAssetUrl(track.path);
-    if (assetUrl) {
-      player.play(assetUrl);
+    // Native (Android) plays the raw file path directly; webview needs the
+    // asset URL. Pass metadata so the media notification shows title/artist.
+    if (isAndroid) {
+      player.play(track.path, { title: track.title, artist: track.artist });
     } else {
-      // Browser mock — just simulate playback
-      console.log(`[mock] Playing: ${track.title} — ${track.artist}`);
+      const assetUrl = await getTrackAssetUrl(track.path);
+      if (assetUrl) {
+        player.play(assetUrl, { title: track.title, artist: track.artist });
+      } else {
+        // Browser mock — just simulate playback
+        console.log(`[mock] Playing: ${track.title} — ${track.artist}`);
+      }
     }
 
     // Fetch lyrics
@@ -439,10 +487,40 @@ export default function App() {
     }
   }
 
-  function handleProgressClick(e: React.MouseEvent<HTMLDivElement>) {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = (e.clientX - rect.left) / rect.width;
-    player.seek(pct * player.duration);
+  // ── Draggable seek bar (native range input → smooth, proportional to duration) ──
+  const [seeking, setSeeking] = useState(false);
+  const [seekPreview, setSeekPreview] = useState(0);
+
+  // Duration can briefly be 0/NaN before metadata loads; guard against it.
+  const safeDuration =
+    player.duration && isFinite(player.duration) ? player.duration : 0;
+
+  // While interacting, show the previewed position; otherwise follow live time.
+  const displayTime = seeking ? seekPreview : player.currentTime;
+  const progressPct = safeDuration ? (displayTime / safeDuration) * 100 : 0;
+
+  // Freeze the bar the instant the handle is grabbed — otherwise the audio's
+  // timeupdate keeps resetting the value and the drag fights live playback.
+  function beginSeek() {
+    if (!safeDuration) return;
+    setSeekPreview(player.currentTime);
+    setSeeking(true);
+  }
+
+  // Update the preview as the user drags; don't commit the seek yet.
+  function handleSeekInput(e: React.ChangeEvent<HTMLInputElement>) {
+    setSeeking(true);
+    setSeekPreview(parseFloat(e.target.value));
+  }
+
+  // Commit the seek when the user releases the handle. Reads the value from the
+  // input element directly so it works for both change and pointer/key events.
+  function handleSeekCommit(
+    e: React.SyntheticEvent<HTMLInputElement>,
+  ) {
+    const val = parseFloat((e.currentTarget as HTMLInputElement).value);
+    if (!isNaN(val)) player.seek(val);
+    setSeeking(false);
   }
 
   // Active lyrics line
@@ -614,7 +692,14 @@ export default function App() {
             </button>
             <button className="mini-btn" onClick={handleNext} title="Next">⏭</button>
           </div>
-          <div className="mini-progress" onClick={handleProgressClick}>
+          <div
+            className="mini-progress"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const pct = (e.clientX - rect.left) / rect.width;
+              player.seek(pct * player.duration);
+            }}
+          >
             <div
               className="mini-progress-fill"
               style={{
@@ -631,7 +716,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout mobile-tab-${mobileTab}`}>
       {isMock && (
         <div className="mock-banner">
           🧪 BROWSER MOCK MODE — Run <code>npm run tauri dev</code> for full desktop app
@@ -695,11 +780,21 @@ export default function App() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <button className="folder-select-btn" onClick={handlePickFolder}>
-            {musicFolder
-              ? `♪ ${musicFolder.split("\\").pop() || musicFolder.split("/").pop()}`
-              : "Select Music Folder"}
-          </button>
+          {isAndroid ? (
+            <button
+              className="folder-select-btn"
+              onClick={() => musicFolder && scanFolder(musicFolder)}
+              title="Rescan your Music folder"
+            >
+              ↻ Rescan Music folder
+            </button>
+          ) : (
+            <button className="folder-select-btn" onClick={handlePickFolder}>
+              {musicFolder
+                ? `♪ ${musicFolder.split("\\").pop() || musicFolder.split("/").pop()}`
+                : "Select Music Folder"}
+            </button>
+          )}
 
           {musicFolder && (
             <>
@@ -722,6 +817,14 @@ export default function App() {
                   {downloading ? "…" : "↓"}
                 </button>
               </div>
+              {downloading && (
+                <div className="yt-progress">
+                  <div
+                    className={`yt-progress-fill ${downloadPct < 0 ? "indeterminate" : ""}`}
+                    style={downloadPct >= 0 ? { width: `${downloadPct}%` } : undefined}
+                  />
+                </div>
+              )}
               {downloadMsg && <div className="yt-status">{downloadMsg}</div>}
             </>
           )}
@@ -1027,15 +1130,31 @@ export default function App() {
             onClick={player.toggleShuffle}
             title="Shuffle"
           >⇌</button>
-          <button className="ctrl-btn" onClick={handlePrev} title="Previous">⏮</button>
+          <button className="ctrl-btn" onClick={handlePrev} title="Previous">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+              <path d="M7 6h2v12H7zM20 6L10 12l10 6z" />
+            </svg>
+          </button>
           <button
             className="ctrl-btn play-btn"
             onClick={currentTrack ? player.togglePlay : undefined}
             title={player.isPlaying ? "Pause" : "Play"}
           >
-            {player.isPlaying ? "⏸" : "▶"}
+            {player.isPlaying ? (
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+                <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            )}
           </button>
-          <button className="ctrl-btn" onClick={handleNext} title="Next">⏭</button>
+          <button className="ctrl-btn" onClick={handleNext} title="Next">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+              <path d="M15 6h2v12h-2zM4 6l10 6L4 18z" />
+            </svg>
+          </button>
           <button
             className={`ctrl-btn ${player.repeat !== "off" ? "active" : ""}`}
             onClick={player.cycleRepeat}
@@ -1046,22 +1165,33 @@ export default function App() {
         </div>
 
         <div className="progress-section">
-          <span className="time-display">{formatTime(player.currentTime)}</span>
-          <div className="progress-bar-container" onClick={handleProgressClick}>
-            <div
-              className="progress-bar-fill"
-              style={{
-                width: player.duration
-                  ? `${(player.currentTime / player.duration) * 100}%`
-                  : "0%",
-              }}
+          <span className="time-display">{formatTime(displayTime)}</span>
+          <div
+            className={`seek-bar ${seeking ? "seeking" : ""}`}
+            style={{ ["--seek-pct" as any]: `${progressPct}%` }}
+          >
+            <input
+              type="range"
+              className="seek-range"
+              min={0}
+              max={safeDuration || 100}
+              step={0.1}
+              value={Math.min(displayTime, safeDuration || 100)}
+              disabled={!safeDuration}
+              onPointerDown={beginSeek}
+              onChange={handleSeekInput}
+              onPointerUp={handleSeekCommit}
+              onKeyUp={handleSeekCommit}
+              aria-label="Seek"
             />
           </div>
           <span className="time-display">{formatTime(player.duration)}</span>
         </div>
 
         <div className="volume-section">
-          <span className="volume-label">VOL</span>
+          <span className="volume-icon" title="Volume">
+            {player.volume === 0 ? "🔇" : player.volume < 0.5 ? "🔉" : "🔊"}
+          </span>
           <input
             className="volume-slider"
             type="range"
@@ -1097,6 +1227,22 @@ export default function App() {
           </a>
         </div>
       </div>
+
+      {/* ── Mobile tab bar (only visible on narrow screens) ── */}
+      <nav className="mobile-tabbar">
+        <button
+          className={mobileTab === "library" ? "active" : ""}
+          onClick={() => setMobileTab("library")}
+        >☰<span>Library</span></button>
+        <button
+          className={mobileTab === "player" ? "active" : ""}
+          onClick={() => setMobileTab("player")}
+        >♪<span>Player</span></button>
+        <button
+          className={mobileTab === "lyrics" ? "active" : ""}
+          onClick={() => setMobileTab("lyrics")}
+        >⛶<span>Lyrics</span></button>
+      </nav>
 
       {/* ── Modals ── */}
       {showOnboarding && (
