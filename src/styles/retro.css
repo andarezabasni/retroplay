@@ -495,6 +495,31 @@ body,
   background: var(--amber-glow);
 }
 
+.track-sort-group {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.track-sort-select {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s;
+}
+
+.track-sort-select:hover,
+.track-sort-select:focus {
+  border-color: var(--amber-dim);
+  color: var(--amber);
+}
+
 .select-remove-btn {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -1599,6 +1624,432 @@ html.overlay-mode #root::after {
   font-size: 9px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* ── Dynamic Island (Desktop Notch & Island) ── */
+.island-window-wrapper {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 0;
+  margin: 0;
+  background: transparent !important;
+  user-select: none;
+  overflow: visible;
+}
+
+.dynamic-island {
+  position: relative;
+  width: 220px;
+  height: 32px;
+  margin: 0 auto;
+  /* Seamlessly attached to top edge of screen, zero outline border */
+  border: none !important;
+  border-radius: 0 0 16px 16px;
+  background: #0d110f;
+  /* No backdrop-filter blur or box-shadow: on Windows transparent WebView2,
+     CSS blur/shadow produces an unclipped milky-white rectangular halo */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  cursor: default;
+  transition: width 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+              height 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+              border-radius 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Expanded state on hover or when pinned/locked */
+.dynamic-island:hover,
+.dynamic-island.is-locked {
+  width: 440px;
+  height: 86px;
+  border: none !important;
+  border-radius: 0 0 20px 20px;
+}
+
+/* ── Top Header (always visible in compact & expanded) ── */
+.island-header {
+  height: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 12px;
+  position: relative;
+}
+
+/* Retro EQ Visualizer bars */
+.island-visualizer {
+  display: flex;
+  align-items: flex-end;
+  gap: 2.5px;
+  height: 14px;
+  width: 16px;
+  flex-shrink: 0;
+  padding-bottom: 2px;
+}
+
+.island-eq-bar {
+  width: 2px;
+  background: var(--amber);
+  border-radius: 1px;
+  height: 3px;
+  transition: height 0.2s ease;
+}
+
+@keyframes islandEq1 {
+  0%, 100% { height: 3px; }
+  50% { height: 12px; }
+}
+@keyframes islandEq2 {
+  0%, 100% { height: 11px; }
+  50% { height: 4px; }
+}
+@keyframes islandEq3 {
+  0%, 100% { height: 5px; }
+  50% { height: 13px; }
+}
+@keyframes islandEq4 {
+  0%, 100% { height: 12px; }
+  50% { height: 3px; }
+}
+
+.island-eq-bar.bar-1.animate { animation: islandEq1 0.75s ease-in-out infinite; }
+.island-eq-bar.bar-2.animate { animation: islandEq2 0.62s ease-in-out infinite 0.15s; }
+.island-eq-bar.bar-3.animate { animation: islandEq3 0.82s ease-in-out infinite 0.05s; }
+.island-eq-bar.bar-4.animate { animation: islandEq4 0.68s ease-in-out infinite 0.25s; }
+
+/* Track Info */
+.island-track-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.island-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #f5eedc;
+  font-family: var(--font-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.island-artist {
+  font-size: 10px;
+  color: var(--amber-dim);
+  font-family: var(--font-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Header buttons (Volume / Pin / Restore) */
+.island-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+/* Volume interactive wrap */
+.island-vol-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.island-vol-btn {
+  background: transparent;
+  border: none;
+  color: rgba(245, 238, 220, 0.8);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.island-vol-btn:hover {
+  transform: scale(1.15);
+}
+
+.island-vol-slider {
+  width: 42px;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.25);
+  outline: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.island-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+  cursor: pointer;
+  box-shadow: 0 0 4px var(--amber);
+}
+
+.island-icon-btn {
+  background: transparent;
+  border: none;
+  color: rgba(245, 238, 220, 0.55);
+  font-size: 11px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.island-icon-btn:hover {
+  color: var(--amber);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.island-icon-btn.active {
+  color: var(--amber);
+  background: rgba(214, 152, 44, 0.18);
+}
+
+.island-restore-btn {
+  font-size: 12px;
+}
+
+/* Volume Toast */
+.island-vol-toast {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--amber);
+  color: #161b18;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-body);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 10;
+  animation: islandToastIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes islandToastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -40%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* ── Expanded Body (Lyrics + Transport + Scrubber) ── */
+.island-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0 12px 6px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.dynamic-island:hover .island-body,
+.dynamic-island.is-locked .island-body {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  transition: opacity 0.22s ease 0.06s, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1) 0.06s;
+}
+
+/* Synced Lyrics Area */
+.island-lyrics-area {
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  overflow: hidden;
+  padding: 0 4px;
+  margin-top: -1px;
+}
+
+.island-lyric-text {
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-body);
+}
+
+.island-lyric-text.has-lyric {
+  color: #fcd34d;
+  font-weight: 500;
+  text-shadow: 0 0 8px var(--amber-glow);
+}
+
+.island-lyric-text.no-lyric {
+  color: rgba(245, 238, 220, 0.45);
+  font-size: 10px;
+  font-style: italic;
+}
+
+/* Controls Row: Transport + Time + Scrubber */
+.island-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  width: 100%;
+}
+
+.island-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.island-ctrl-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #f5eedc;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.island-ctrl-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: var(--amber);
+  color: var(--amber);
+  transform: scale(1.08);
+}
+
+.island-ctrl-btn.island-play-btn {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #161b18;
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+  box-shadow: 0 2px 8px var(--amber-glow);
+}
+
+.island-ctrl-btn.island-play-btn:hover {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: #fff;
+  transform: scale(1.1);
+}
+
+.island-time,
+.island-duration {
+  font-size: 9px;
+  color: rgba(245, 238, 220, 0.65);
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* ── Generous Scrubber Hit-box ── */
+.island-scrub-area {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.island-scrub-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+  transition: height 0.15s ease, background 0.15s ease;
+}
+
+.island-scrub-area:hover .island-scrub-track,
+.island-scrub-area.is-scrubbing .island-scrub-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.island-scrub-fill {
+  height: 100%;
+  background: var(--amber);
+  border-radius: 2px;
+  position: relative;
+  transition: width 0.05s linear;
+}
+
+.island-scrub-thumb {
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 6px var(--amber);
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.island-scrub-area:hover .island-scrub-thumb,
+.island-scrub-area.is-scrubbing .island-scrub-thumb {
+  opacity: 1;
+  transform: translateY(-50%) scale(1.15);
+}
+
+/* Island toggle button in main bottom bar */
+.island-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.island-toggle:hover {
+  color: var(--amber);
+  border-color: var(--amber-dim);
 }
 
 /* ── Modals ── */

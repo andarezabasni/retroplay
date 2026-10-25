@@ -16,6 +16,7 @@ import {
   deletePlaylist,
   enterMiniMode,
   enterLyricsOverlay,
+  enterDynamicIsland,
   exitFloatMode,
   startWindowDrag,
   isTauri,
@@ -54,6 +55,13 @@ export default function App() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [miniMode, setMiniMode] = useState(false);
+  const [islandMode, setIslandMode] = useState(false);
+  const [islandLocked, setIslandLocked] = useState(false);
+  const [volumeToast, setVolumeToast] = useState<number | null>(null);
+  const volumeToastTimer = useRef<number | null>(null);
+  const lastVolume = useRef(0.7);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const scrubRef = useRef<HTMLDivElement>(null);
   const [lyricsView, setLyricsView] = useState<"panel" | "focus" | "overlay">("panel");
   // On narrow (mobile) screens only one panel shows at a time via this tab.
   const [mobileTab, setMobileTab] = useState<"library" | "player" | "lyrics">("library");
@@ -97,10 +105,40 @@ export default function App() {
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const lyricsReq = useRef(0);
 
-  // Source tracks: full library or active playlist
-  const sourceTracks = activePlaylist && playlists[activePlaylist]
-    ? playlists[activePlaylist]
-    : tracks;
+  // Source tracks: full library, recent downloads, or active playlist
+  const [sortBy, setSortBy] = useState<"title" | "recent" | "artist">(() => {
+    return (localStorage.getItem("retroplay_sort_by") as any) || "title";
+  });
+
+  const getSortedTracks = useCallback((list: Track[], sort: "title" | "recent" | "artist") => {
+    const copy = [...list];
+    if (sort === "recent") {
+      return copy.sort((a, b) => {
+        const timeA = a.modified_time || 0;
+        const timeB = b.modified_time || 0;
+        if (timeA !== timeB) return timeB - timeA;
+        return a.title.localeCompare(b.title);
+      });
+    } else if (sort === "artist") {
+      return copy.sort((a, b) => {
+        const cmp = a.artist.localeCompare(b.artist);
+        return cmp !== 0 ? cmp : a.title.localeCompare(b.title);
+      });
+    }
+    return copy.sort((a, b) => a.title.localeCompare(b.title));
+  }, []);
+
+  const rawSourceTracks =
+    activePlaylist === "__recent__"
+      ? [...tracks].sort((a, b) => (b.modified_time || 0) - (a.modified_time || 0))
+      : activePlaylist && playlists[activePlaylist]
+      ? playlists[activePlaylist]
+      : tracks;
+
+  const sourceTracks =
+    activePlaylist === "__recent__"
+      ? rawSourceTracks
+      : getSortedTracks(rawSourceTracks, sortBy);
 
   const currentTrack = currentIndex >= 0 ? sourceTracks[currentIndex] : null;
 
@@ -346,7 +384,13 @@ export default function App() {
     setSelectMode(false);
     setSelected(new Set());
     // Keep "now playing" pointing at the same song in the new list.
-    const newList = name && playlists[name] ? playlists[name] : tracks;
+    const raw =
+      name === "__recent__"
+        ? [...tracks].sort((a, b) => (b.modified_time || 0) - (a.modified_time || 0))
+        : name && playlists[name]
+        ? playlists[name]
+        : tracks;
+    const newList = name === "__recent__" ? raw : getSortedTracks(raw, sortBy);
     setCurrentIndex(cur ? newList.findIndex((t) => t.path === cur.path) : -1);
   }
 
@@ -415,8 +459,25 @@ export default function App() {
   // the window mid-morph and corrupt the saved geometry.
   const floatTransition = useRef(false);
 
+  async function toggleIslandMode() {
+    if (floatTransition.current || lyricsView === "overlay" || miniMode) return;
+    floatTransition.current = true;
+    try {
+      if (!islandMode) {
+        winSnapshot.current = await enterDynamicIsland();
+        setIslandMode(true);
+      } else {
+        await exitFloatMode(winSnapshot.current);
+        setIslandMode(false);
+        setIslandLocked(false);
+      }
+    } finally {
+      floatTransition.current = false;
+    }
+  }
+
   async function toggleMiniMode() {
-    if (floatTransition.current || lyricsView === "overlay") return;
+    if (floatTransition.current || lyricsView === "overlay" || islandMode) return;
     floatTransition.current = true;
     try {
       if (!miniMode) {
@@ -432,7 +493,7 @@ export default function App() {
   }
 
   async function enterOverlay() {
-    if (floatTransition.current || lyricsView === "overlay" || miniMode) return;
+    if (floatTransition.current || lyricsView === "overlay" || miniMode || islandMode) return;
     floatTransition.current = true;
     try {
       winSnapshot.current = await enterLyricsOverlay();
@@ -453,24 +514,84 @@ export default function App() {
     }
   }
 
-  // Transparent window background while the lyrics overlay is active.
+  // Transparent window background while the lyrics overlay or dynamic island is active.
   useEffect(() => {
     document.documentElement.classList.toggle(
       "overlay-mode",
-      lyricsView === "overlay"
+      lyricsView === "overlay" || islandMode
     );
-  }, [lyricsView]);
+  }, [lyricsView, islandMode]);
 
-  // Esc leaves focus / overlay lyrics view.
+  // Esc leaves focus / overlay / mini / dynamic island view.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (lyricsView === "focus") setLyricsView("panel");
+      if (islandMode) toggleIslandMode();
+      else if (miniMode) toggleMiniMode();
+      else if (lyricsView === "focus") setLyricsView("panel");
       else if (lyricsView === "overlay") exitOverlay();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [lyricsView]);
+  }, [lyricsView, miniMode, islandMode]);
+
+  const handleIslandWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const step = 0.05;
+    const delta = e.deltaY < 0 ? step : -step;
+    const nextVol = Math.max(0, Math.min(1, Math.round((player.volume + delta) * 100) / 100));
+    player.setVolume(nextVol);
+    setVolumeToast(Math.round(nextVol * 100));
+    if (volumeToastTimer.current) clearTimeout(volumeToastTimer.current);
+    volumeToastTimer.current = window.setTimeout(() => {
+      setVolumeToast(null);
+    }, 1200);
+  };
+
+  const toggleMute = () => {
+    if (player.volume > 0) {
+      lastVolume.current = player.volume;
+      player.setVolume(0);
+      setVolumeToast(0);
+    } else {
+      const restore = lastVolume.current || 0.7;
+      player.setVolume(restore);
+      setVolumeToast(Math.round(restore * 100));
+    }
+    if (volumeToastTimer.current) clearTimeout(volumeToastTimer.current);
+    volumeToastTimer.current = window.setTimeout(() => setVolumeToast(null), 1200);
+  };
+
+  const seekFromEvent = useCallback(
+    (clientX: number) => {
+      if (!scrubRef.current || !player.duration) return;
+      const rect = scrubRef.current.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      player.seek(pct * player.duration);
+    },
+    [player.duration, player.seek]
+  );
+
+  const handleScrubMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.stopPropagation();
+      setIsScrubbing(true);
+      seekFromEvent(e.clientX);
+
+      const onMove = (ev: MouseEvent) => {
+        seekFromEvent(ev.clientX);
+      };
+      const onUp = () => {
+        setIsScrubbing(false);
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    },
+    [seekFromEvent]
+  );
 
   function handlePrev() {
     if (currentIndex > 0) selectTrack(currentIndex - 1);
@@ -715,6 +836,170 @@ export default function App() {
     );
   }
 
+  // ── Dynamic Island (Desktop Notch Mode) ──
+  if (islandMode) {
+    const isInteractive = (el: EventTarget) =>
+      Boolean((el as HTMLElement).closest?.("button, input, .island-scrub-area, .island-icon-btn, .island-vol-wrap"));
+
+    const currentLyric =
+      lyricsStatus === "synced" && activeLine >= 0 && lrcLines[activeLine]
+        ? lrcLines[activeLine].text
+        : lyricsStatus === "instrumental"
+        ? "~ Instrumental ~"
+        : "";
+
+    const progressPct = player.duration
+      ? Math.min(100, (player.currentTime / player.duration) * 100)
+      : 0;
+
+    return (
+      <div className="island-window-wrapper">
+        <div
+          className={`dynamic-island ${islandLocked ? "is-locked" : ""}`}
+          onWheel={handleIslandWheel}
+          onDoubleClick={(e) => {
+            if (!isInteractive(e.target)) toggleIslandMode();
+          }}
+          title="Dynamic Island — Double-click or Esc to restore, scroll wheel for volume"
+        >
+          {/* Top Bar: Always visible */}
+          <div className="island-header">
+            {/* Visualizer & Equalizer */}
+            <div className="island-visualizer" title={player.isPlaying ? "Playing" : "Paused"}>
+              <span className={`island-eq-bar bar-1 ${player.isPlaying ? "animate" : ""}`} />
+              <span className={`island-eq-bar bar-2 ${player.isPlaying ? "animate" : ""}`} />
+              <span className={`island-eq-bar bar-3 ${player.isPlaying ? "animate" : ""}`} />
+              <span className={`island-eq-bar bar-4 ${player.isPlaying ? "animate" : ""}`} />
+            </div>
+
+            {/* Track Info */}
+            <div className="island-track-info">
+              <span className="island-title">
+                {currentTrack ? currentTrack.title : "RetroPlay"}
+              </span>
+              <span className="island-artist">
+                {currentTrack ? ` • ${currentTrack.artist}` : ""}
+              </span>
+            </div>
+
+            {/* Volume Toast Popup */}
+            {volumeToast !== null && (
+              <div className="island-vol-toast">
+                {volumeToast === 0 ? "🔇 Mute" : `🔊 ${volumeToast}%`}
+              </div>
+            )}
+
+            {/* Header Action Buttons */}
+            <div className="island-header-actions">
+              {/* Volume interactive control */}
+              <div className="island-vol-wrap" title="Click icon to mute/unmute, or drag slider">
+                <button
+                  type="button"
+                  className="island-vol-btn"
+                  onClick={toggleMute}
+                  title={player.volume === 0 ? "Unmute" : "Mute"}
+                >
+                  {player.volume === 0 ? "🔇" : player.volume < 0.5 ? "🔉" : "🔊"}
+                </button>
+                <input
+                  type="range"
+                  className="island-vol-slider"
+                  min="0"
+                  max="1"
+                  step="0.02"
+                  value={player.volume}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    player.setVolume(v);
+                    setVolumeToast(Math.round(v * 100));
+                    if (volumeToastTimer.current) clearTimeout(volumeToastTimer.current);
+                    volumeToastTimer.current = window.setTimeout(() => setVolumeToast(null), 1200);
+                  }}
+                />
+              </div>
+
+              <button
+                className={`island-icon-btn ${islandLocked ? "active" : ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIslandLocked((l) => !l);
+                }}
+                title={islandLocked ? "Unlock (auto-collapse on mouse leave)" : "Pin expanded"}
+              >
+                {islandLocked ? "📌" : "📍"}
+              </button>
+              <button
+                className="island-icon-btn island-restore-btn"
+                onClick={toggleIslandMode}
+                title="Restore full window"
+              >
+                ⤢
+              </button>
+            </div>
+          </div>
+
+          {/* Expanded Body: Synced Lyrics & Transport Controls */}
+          <div className="island-body">
+            {/* Synced Lyrics Line */}
+            <div className="island-lyrics-area">
+              <span className={`island-lyric-text ${currentLyric ? "has-lyric" : "no-lyric"}`}>
+                {currentLyric || "♪ RetroPlay ♪"}
+              </span>
+            </div>
+
+            {/* Controls Row: Transport + Time + Scrubber */}
+            <div className="island-controls-row">
+              <div className="island-buttons">
+                <button
+                  className="island-ctrl-btn"
+                  onClick={handlePrev}
+                  title="Previous track"
+                >
+                  ⏮
+                </button>
+                <button
+                  className="island-ctrl-btn island-play-btn"
+                  onClick={currentTrack ? player.togglePlay : undefined}
+                  title={player.isPlaying ? "Pause" : "Play"}
+                >
+                  {player.isPlaying ? "⏸" : "▶"}
+                </button>
+                <button
+                  className="island-ctrl-btn"
+                  onClick={handleNext}
+                  title="Next track"
+                >
+                  ⏭
+                </button>
+              </div>
+
+              <span className="island-time">{formatTime(player.currentTime)}</span>
+
+              {/* Generous Scrub Target Area */}
+              <div
+                ref={scrubRef}
+                className={`island-scrub-area ${isScrubbing ? "is-scrubbing" : ""}`}
+                onMouseDown={handleScrubMouseDown}
+                title="Click or drag to seek"
+              >
+                <div className="island-scrub-track">
+                  <div
+                    className="island-scrub-fill"
+                    style={{ width: `${progressPct}%` }}
+                  >
+                    <div className="island-scrub-thumb" />
+                  </div>
+                </div>
+              </div>
+
+              <span className="island-duration">{formatTime(player.duration)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`app-layout mobile-tab-${mobileTab}`}>
       {isMock && (
@@ -873,7 +1158,14 @@ export default function App() {
                     className={`playlist-item ${activePlaylist === null ? "active" : ""}`}
                     onClick={() => selectPlaylist(null)}
                   >
-                    <span className="playlist-name">📚 All Tracks</span>
+                    <span className="playlist-name">All Tracks</span>
+                    <span className="playlist-count">{tracks.length}</span>
+                  </div>
+                  <div
+                    className={`playlist-item ${activePlaylist === "__recent__" ? "active" : ""}`}
+                    onClick={() => selectPlaylist("__recent__")}
+                  >
+                    <span className="playlist-name">Recently Downloaded</span>
                     <span className="playlist-count">{tracks.length}</span>
                   </div>
                   {Object.entries(playlists).map(([name, plTracks]) => (
@@ -931,6 +1223,29 @@ export default function App() {
             >
               {selectMode ? `✕ Cancel (${selected.size})` : "☑ Select"}
             </button>
+            <div className="track-sort-group">
+              <select
+                className="track-sort-select"
+                value={activePlaylist === "__recent__" ? "recent" : sortBy}
+                onChange={(e) => {
+                  const val = e.target.value as "title" | "recent" | "artist";
+                  setSortBy(val);
+                  localStorage.setItem("retroplay_sort_by", val);
+                  if (activePlaylist === "__recent__" && val !== "recent") {
+                    setActivePlaylist(null);
+                  }
+                  if (currentTrack) {
+                    const sorted = getSortedTracks(rawSourceTracks, val);
+                    setCurrentIndex(sorted.findIndex((t) => t.path === currentTrack.path));
+                  }
+                }}
+                title="Sort / filter tracks"
+              >
+                <option value="title">Sort: Title (A-Z)</option>
+                <option value="recent">Sort: Recently Downloaded</option>
+                <option value="artist">Sort: Artist (A-Z)</option>
+              </select>
+            </div>
             {selectMode && selected.size > 0 && (
               <>
                 {Object.keys(playlists).length > 0 && (
@@ -1202,12 +1517,24 @@ export default function App() {
             onChange={(e) => player.setVolume(parseFloat(e.target.value))}
           />
           <span className="volume-label">{Math.round(player.volume * 100)}%</span>
-          {isTauri() && (
-            <button
-              className="ctrl-btn mini-toggle"
-              onClick={toggleMiniMode}
-              title="Mini player"
-            >▣</button>
+          {isTauri() && platform !== "android" && (
+            <>
+              <button
+                className="ctrl-btn island-toggle"
+                onClick={toggleIslandMode}
+                title="Dynamic Island (top of screen)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="7" width="20" height="10" rx="5" />
+                  <circle cx="8" cy="12" r="1.5" fill="currentColor" />
+                </svg>
+              </button>
+              <button
+                className="ctrl-btn mini-toggle"
+                onClick={toggleMiniMode}
+                title="Mini player"
+              >▣</button>
+            </>
           )}
           <button
             className="ctrl-btn about-toggle"

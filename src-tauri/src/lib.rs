@@ -12,6 +12,7 @@ pub struct TrackMeta {
     pub artist: String,
     pub album: String,
     pub duration_secs: f64,
+    pub modified_time: Option<u64>,
 }
 
 /// True for empty / yt-dlp "NA" / "Unknown ..." placeholder values that
@@ -74,6 +75,12 @@ fn read_track_meta(path: &PathBuf) -> Option<TrackMeta> {
         .map(|d| d.as_secs_f64())
         .unwrap_or(0.0);
 
+    let modified_time = fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs());
+
     Some(TrackMeta {
         path: path.to_string_lossy().to_string(),
         filename,
@@ -81,6 +88,7 @@ fn read_track_meta(path: &PathBuf) -> Option<TrackMeta> {
         artist,
         album,
         duration_secs,
+        modified_time,
     })
 }
 

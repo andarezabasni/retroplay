@@ -16,6 +16,7 @@ export interface Track {
   artist: string;
   album: string;
   duration_secs: number;
+  modified_time?: number;
 }
 
 export interface LyricsResult {
@@ -368,6 +369,8 @@ const MINI_W = 380;
 const MINI_H = 160;
 const OVERLAY_W = 760;
 const OVERLAY_H = 190;
+const ISLAND_W = 440;
+const ISLAND_H = 88;
 
 /** Main-window minimum size, matching tauri.conf.json. */
 const MAIN_MIN_W = 900;
@@ -380,7 +383,7 @@ const MAIN_MIN_H = 600;
 async function enterFloatWindow(
   width: number,
   height: number,
-  place: "bottom-right" | "bottom-center",
+  place: "bottom-right" | "bottom-center" | "top-center",
   shadow: boolean,
 ): Promise<WindowSnapshot | null> {
   if (!isTauri()) {
@@ -432,11 +435,19 @@ async function enterFloatWindow(
     const f = mon.scaleFactor;
     const wPhys = Math.round(width * f);
     const hPhys = Math.round(height * f);
-    const x =
-      place === "bottom-right"
-        ? mon.position.x + mon.size.width - wPhys - Math.round(16 * f)
-        : mon.position.x + Math.round((mon.size.width - wPhys) / 2);
-    const y = mon.position.y + mon.size.height - hPhys - Math.round(56 * f);
+    let x: number;
+    let y: number;
+    if (place === "bottom-right") {
+      x = mon.position.x + mon.size.width - wPhys - Math.round(16 * f);
+      y = mon.position.y + mon.size.height - hPhys - Math.round(56 * f);
+    } else if (place === "bottom-center") {
+      x = mon.position.x + Math.round((mon.size.width - wPhys) / 2);
+      y = mon.position.y + mon.size.height - hPhys - Math.round(56 * f);
+    } else {
+      // "top-center": flush against top edge of the screen (Mac notch style)
+      x = mon.position.x + Math.round((mon.size.width - wPhys) / 2);
+      y = mon.position.y;
+    }
     await win.setPosition(new PhysicalPosition(x, y));
   }
   return snapshot;
@@ -450,6 +461,11 @@ export function enterMiniMode(): Promise<WindowSnapshot | null> {
 /** Floating lyrics overlay: wide bar at the bottom-center. */
 export function enterLyricsOverlay(): Promise<WindowSnapshot | null> {
   return enterFloatWindow(OVERLAY_W, OVERLAY_H, "bottom-center", false);
+}
+
+/** Dynamic Island: top-center capsule. */
+export function enterDynamicIsland(): Promise<WindowSnapshot | null> {
+  return enterFloatWindow(ISLAND_W, ISLAND_H, "top-center", false);
 }
 
 /** Restore the main window from any floating mode. */
