@@ -103,3 +103,6 @@ out of version control.
 ## Credits
 Made by [andreza.dev](https://instagram.com/andreza.dev)
 GitHub: [@andarezabasni](https://github.com/andarezabasni)
+
+## License
+This project is licensed under the [MIT License](LICENSE).
