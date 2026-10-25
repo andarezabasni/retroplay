@@ -39,7 +39,7 @@ export function AboutModal({ onClose }: AboutModalProps) {
         </div>
 
         <div className="about-content">
-          <p className="about-version">v1.0.0</p>
+          <p className="about-version">v3.2.0</p>
 
           <p className="about-description">
             Offline desktop music player with synced lyrics, retro aesthetic, and floating modes.

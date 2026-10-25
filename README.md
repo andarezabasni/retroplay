@@ -19,8 +19,8 @@ playback with media notification controls on Android.
 
 Download the latest release from the [Releases page](https://github.com/andarezabasni/retroplay/releases/latest):
 
-- Windows: `RetroPlay_3.1.0_x64-setup.exe` (recommended) or `RetroPlay_3.1.0_x64_en-US.msi`
-- Android: `RetroPlay_3.1.0_android.apk`
+- Windows: `RetroPlay_3.2.0_x64-setup.exe` (recommended) or `RetroPlay_3.2.0_x64_en-US.msi`
+- Android: `RetroPlay_3.2.0_android.apk`
 
 On desktop, `yt-dlp` and `ffmpeg` are bundled with the installer. On Android they
 are bundled inside the APK. There is nothing else to install.
